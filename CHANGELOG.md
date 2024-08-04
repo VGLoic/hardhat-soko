@@ -1,5 +1,11 @@
 # hardhat-soko
 
+## 0.1.1
+
+### Patch Changes
+
+- 83a7c23: Fix package visibility to public
+
 ## 0.1.0
 
 ### Minor Changes
