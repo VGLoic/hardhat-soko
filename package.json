@@ -21,11 +21,11 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsup",
-    "tsc": "tsc",
     "lint": "eslint src",
     "format": "prettier --write src/**/*.ts",
     "format:check": "prettier --check src/**/*.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "release": "npm run build && changeset publish"
   },
   "keywords": [
     "web3",
@@ -35,6 +35,7 @@
     "plugin"
   ],
   "devDependencies": {
+    "@changesets/cli": "^2.27.7",
     "@eslint/js": "^9.8.0",
     "eslint": "^9.8.0",
     "globals": "^15.9.0",
