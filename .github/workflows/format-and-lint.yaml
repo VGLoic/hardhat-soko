@@ -1,0 +1,20 @@
+name: Format and lint check
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  format-and-lint:
+    runs-on: ubuntu-latest
+    name: Format and lint check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm run lint
