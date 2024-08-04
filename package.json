@@ -25,6 +25,7 @@
     "format": "prettier --write src/**/*.ts",
     "format:check": "prettier --check src/**/*.ts",
     "typecheck": "tsc --noEmit",
+    "changeset": "changeset",
     "release": "npm run build && changeset publish"
   },
   "keywords": [
