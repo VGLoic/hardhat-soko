@@ -1,6 +1,6 @@
 {
   "name": "hardhat-soko",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Hardhat plugin for managing released compilation artifacts",
   "author": "Loïc Vincent-Genod",
   "license": "MIT",

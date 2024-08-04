@@ -1,5 +1,11 @@
 # hardhat-soko
 
+## 0.2.0
+
+### Minor Changes
+
+- b2072e0: Update hardhat config
+
 ## 0.1.1
 
 ### Patch Changes
