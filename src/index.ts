@@ -12,6 +12,7 @@ import {
 import { retrieveReleasesSummary } from "./scripts/retrieve-releases-summary";
 import { S3BucketProvider } from "./s3-bucket-provider";
 import { pull } from "./scripts/pull";
+import { generateReleasesSummary } from "./scripts/generate-releases-summary";
 
 export async function addFile() {
   await fs.mkdir("./.soko", { recursive: true });
@@ -31,7 +32,6 @@ export async function clearFiles() {
 declare module "hardhat/types/config" {
   export interface HardhatUserConfig {
     soko?: {
-      debug?: boolean;
       storageConfiguration: {
         type: "aws";
         awsRegion: string;
@@ -44,7 +44,6 @@ declare module "hardhat/types/config" {
 
   export interface HardhatConfig {
     soko?: {
-      debug: boolean;
       storageConfiguration: {
         type: "aws";
         awsRegion: string;
@@ -175,10 +174,12 @@ sokoScope
     "noFilter",
     "Do not filter similar contract in subsequent releases when generating typings",
   )
+  .addFlag("debug", "Enable debug mode")
   .setAction(async (opts, hre) => {
     const sokoConfig = hre.config.soko;
     if (!sokoConfig) {
       console.error("❌ Soko is not configured.");
+      process.exitCode = 1;
       return;
     }
 
@@ -193,13 +194,14 @@ sokoScope
       .object({
         release: z.string().optional(),
         force: z.boolean().default(false),
-        typingGeneration: z.boolean().default(true),
-        filter: z.boolean().default(true),
+        noTypingGeneration: z.boolean().default(false),
+        noFilter: z.boolean().default(false),
         debug: z.boolean().default(false),
       })
       .safeParse(opts);
     if (!optsParsingResult.success) {
       console.log(LOG_COLORS.error, "❌ Invalid arguments");
+      process.exitCode = 1;
       return;
     }
 
@@ -270,34 +272,96 @@ sokoScope
       }
     }
 
-    // if (optsParsingResult.data.typingGeneration) {
-    //   await generateReleasesSummary(optsParsingResult.data.filter, {
-    //     debug: optsParsingResult.data.debug,
-    //   }).catch((err) => {
-    //     if (err instanceof ScriptError) {
-    //       console.log(LOG_COLORS.error, "❌ ", err.message);
-    //       process.exitCode = 1;
-    //       return;
-    //     }
-    //     console.log(LOG_COLORS.error, "❌ An unexpected error occurred: ", err);
-    //     process.exitCode = 1;
-    //   });
+    if (!optsParsingResult.data.noTypingGeneration) {
+      await generateReleasesSummary(
+        SOKO_DIRECTORY,
+        !optsParsingResult.data.noFilter,
+        {
+          debug: optsParsingResult.data.debug,
+        },
+      ).catch((err) => {
+        if (err instanceof ScriptError) {
+          console.log(LOG_COLORS.error, "❌ ", err.message);
+          process.exitCode = 1;
+          return;
+        }
+        console.log(LOG_COLORS.error, "❌ An unexpected error occurred: ", err);
+        process.exitCode = 1;
+      });
 
-    //   console.log(LOG_COLORS.success, "\nTypings generated successfully\n");
-    // }
+      console.log(LOG_COLORS.success, "\nTypings generated successfully\n");
+    }
+  });
+
+sokoScope
+  .task("generate-typings", "Generate typings based on the existing releases")
+  .addFlag("noFilter", "Do not filter similar contract in subsequent releases")
+  .addFlag("debug", "Enable debug mode")
+  .setAction(async (opts) => {
+    const parsingResult = z
+      .object({
+        noFilter: z.boolean().default(false),
+        debug: z.boolean().default(false),
+      })
+      .safeParse(opts);
+
+    if (!parsingResult.success) {
+      console.error(LOG_COLORS.error, "❌ Invalid arguments");
+      process.exitCode = 1;
+      return;
+    }
+
+    console.log(
+      LOG_COLORS.log,
+      `\nStarting typings generation. ${
+        !parsingResult.data.noFilter
+          ? "Similar contracts in subsequent releases will be filtered."
+          : "All contracts for all releases will be considered"
+      }`,
+    );
+
+    console.log("\n");
+
+    await generateReleasesSummary(
+      SOKO_DIRECTORY,
+      !parsingResult.data.noFilter,
+      {
+        debug: parsingResult.data.debug,
+      },
+    ).catch((err) => {
+      if (err instanceof ScriptError) {
+        console.log(LOG_COLORS.error, "❌ ", err.message);
+        process.exitCode = 1;
+        return;
+      }
+      console.log(LOG_COLORS.error, "❌ An unexpected error occurred: ", err);
+      process.exitCode = 1;
+    });
+
+    console.log(LOG_COLORS.success, "\nTypings generated successfully\n");
   });
 
 sokoScope
   .task("describe", "Describe releases and their contents")
-  .setAction(async (_, hre) => {
-    if (!hre.config.soko) {
-      console.error("❌ Soko is not configured.");
+  .addFlag("debug", "Enable debug mode")
+  .setAction(async (opts) => {
+    const parsingResult = z
+      .object({
+        debug: z.boolean().default(false),
+      })
+      .safeParse(opts);
+
+    if (!parsingResult.success) {
+      console.error(LOG_COLORS.error, "❌ Invalid arguments");
+      process.exitCode = 1;
       return;
     }
 
     const releasesSummaryResult = await toAsyncResult(
-      retrieveReleasesSummary(SOKO_DIRECTORY, { debug: hre.config.soko.debug }),
-      { debug: hre.config.soko.debug },
+      retrieveReleasesSummary(SOKO_DIRECTORY, {
+        debug: parsingResult.data.debug,
+      }),
+      { debug: parsingResult.data.debug },
     );
     if (!releasesSummaryResult.success) {
       if (releasesSummaryResult.error instanceof ScriptError) {
