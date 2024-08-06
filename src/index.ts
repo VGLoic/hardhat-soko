@@ -10,6 +10,8 @@ import {
   toAsyncResult,
 } from "./utils";
 import { retrieveReleasesSummary } from "./scripts/retrieve-releases-summary";
+import { S3BucketProvider } from "./s3-bucket-provider";
+import { pull } from "./scripts/pull";
 
 export async function addFile() {
   await fs.mkdir("./.soko", { recursive: true });
@@ -156,10 +158,140 @@ extendConfig(
 const sokoScope = scope("soko", "Soko Hardhat tasks");
 
 sokoScope
+  .task(
+    "pull",
+    "Pull the missing releases from the release storage and generate associated typings",
+  )
+  .addOptionalParam(
+    "release",
+    "A specific release to pull from the release storage. If not provided, all missing releases will be pulled",
+  )
+  .addFlag("force", "Force the pull of the releases, replacing local ones")
+  .addFlag(
+    "noTypingGeneration",
+    "Do not generate typings for the pulled releases",
+  )
+  .addFlag(
+    "noFilter",
+    "Do not filter similar contract in subsequent releases when generating typings",
+  )
+  .setAction(async (opts, hre) => {
+    const sokoConfig = hre.config.soko;
+    if (!sokoConfig) {
+      console.error("❌ Soko is not configured.");
+      return;
+    }
+
+    const releaseStorageProvider = new S3BucketProvider({
+      bucketName: sokoConfig.storageConfiguration.awsBucketName,
+      bucketRegion: sokoConfig.storageConfiguration.awsRegion,
+      accessKeyId: sokoConfig.storageConfiguration.awsAccessKeyId,
+      secretAccessKey: sokoConfig.storageConfiguration.awsSecretAccessKey,
+    });
+
+    const optsParsingResult = z
+      .object({
+        release: z.string().optional(),
+        force: z.boolean().default(false),
+        typingGeneration: z.boolean().default(true),
+        filter: z.boolean().default(true),
+        debug: z.boolean().default(false),
+      })
+      .safeParse(opts);
+    if (!optsParsingResult.success) {
+      console.log(LOG_COLORS.error, "❌ Invalid arguments");
+      return;
+    }
+
+    if (optsParsingResult.data.release) {
+      console.log(
+        LOG_COLORS.log,
+        `\nPulling the release "${optsParsingResult.data.release}" from the release storage`,
+      );
+    } else {
+      console.log(
+        LOG_COLORS.log,
+        "\nPulling the missing releases from the release storage",
+      );
+    }
+
+    const pullResult = await toAsyncResult(
+      pull(SOKO_DIRECTORY, optsParsingResult.data, releaseStorageProvider),
+      { debug: optsParsingResult.data.debug },
+    );
+    if (!pullResult.success) {
+      if (pullResult.error instanceof ScriptError) {
+        console.log(LOG_COLORS.error, "❌ ", pullResult.error.message);
+        process.exitCode = 1;
+        return;
+      }
+      console.log(
+        LOG_COLORS.error,
+        "❌ An unexpected error occurred: ",
+        pullResult.error,
+      );
+      process.exitCode = 1;
+      return;
+    }
+
+    if (pullResult.value.remoteReleases.length === 0) {
+      console.log(LOG_COLORS.success, "\nNo releases to pull yet");
+    } else if (
+      pullResult.value.failedReleases.length === 0 &&
+      pullResult.value.pulledReleases.length === 0
+    ) {
+      console.log(
+        LOG_COLORS.success,
+        `\nYou're up to date with ${pullResult.value.remoteReleases.length} releases:`,
+      );
+      pullResult.value.remoteReleases.forEach((release) => {
+        console.log(LOG_COLORS.success, ` - ${release}`);
+      });
+    } else {
+      if (pullResult.value.pulledReleases.length > 0) {
+        console.log(
+          LOG_COLORS.success,
+          `\nPulled ${pullResult.value.pulledReleases.length} releases from storage:`,
+        );
+        pullResult.value.pulledReleases.forEach((release) => {
+          console.log(LOG_COLORS.success, ` - ${release}`);
+        });
+      }
+
+      if (pullResult.value.failedReleases.length > 0) {
+        console.log(
+          LOG_COLORS.error,
+          `\n❌ Failed to pull ${pullResult.value.failedReleases.length} releases:`,
+        );
+        pullResult.value.failedReleases.forEach((release) => {
+          console.log(LOG_COLORS.error, ` - ${release}`);
+        });
+        console.log("\n");
+      }
+    }
+
+    // if (optsParsingResult.data.typingGeneration) {
+    //   await generateReleasesSummary(optsParsingResult.data.filter, {
+    //     debug: optsParsingResult.data.debug,
+    //   }).catch((err) => {
+    //     if (err instanceof ScriptError) {
+    //       console.log(LOG_COLORS.error, "❌ ", err.message);
+    //       process.exitCode = 1;
+    //       return;
+    //     }
+    //     console.log(LOG_COLORS.error, "❌ An unexpected error occurred: ", err);
+    //     process.exitCode = 1;
+    //   });
+
+    //   console.log(LOG_COLORS.success, "\nTypings generated successfully\n");
+    // }
+  });
+
+sokoScope
   .task("describe", "Describe releases and their contents")
   .setAction(async (_, hre) => {
     if (!hre.config.soko) {
-      console.error("Soko is not configured.");
+      console.error("❌ Soko is not configured.");
       return;
     }
 
