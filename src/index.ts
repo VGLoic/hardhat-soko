@@ -17,6 +17,7 @@ import {
   generateEmptyReleasesSummaryJsonContent,
   generateReleasesSummary,
 } from "./scripts/generate-releases-summary";
+import { pushRelease } from "./scripts/push";
 
 declare module "hardhat/types/config" {
   export interface HardhatUserConfig {
@@ -185,13 +186,6 @@ sokoScope
       return;
     }
 
-    const releaseStorageProvider = new S3BucketProvider({
-      bucketName: sokoConfig.storageConfiguration.awsBucketName,
-      bucketRegion: sokoConfig.storageConfiguration.awsRegion,
-      accessKeyId: sokoConfig.storageConfiguration.awsAccessKeyId,
-      secretAccessKey: sokoConfig.storageConfiguration.awsSecretAccessKey,
-    });
-
     const optsParsingResult = z
       .object({
         release: z.string().optional(),
@@ -218,6 +212,13 @@ sokoScope
         "\nPulling the missing releases from the release storage",
       );
     }
+
+    const releaseStorageProvider = new S3BucketProvider({
+      bucketName: sokoConfig.storageConfiguration.awsBucketName,
+      bucketRegion: sokoConfig.storageConfiguration.awsRegion,
+      accessKeyId: sokoConfig.storageConfiguration.awsAccessKeyId,
+      secretAccessKey: sokoConfig.storageConfiguration.awsSecretAccessKey,
+    });
 
     const pullResult = await toAsyncResult(
       pull(SOKO_DIRECTORY, optsParsingResult.data, releaseStorageProvider),
@@ -423,6 +424,76 @@ sokoScope
         console.log(LOG_COLORS.log, `   - ${contractName} (${contractPath})`);
       }
     }
+  });
+
+sokoScope
+  .task("push", "Push a release to the release storage")
+  .addParam("release", "The release to push to the release storage")
+  .addFlag(
+    "force",
+    "Force the push of the release even if it already exists in the release storage",
+  )
+  .addFlag("debug", "Enable debug mode")
+  .setAction(async (opts, hre) => {
+    const sokoConfig = hre.config.soko;
+    if (!sokoConfig) {
+      console.error("❌ Soko is not configured.");
+      process.exitCode = 1;
+      return;
+    }
+
+    const optsParsingResult = z
+      .object({
+        release: z.string().min(1),
+        force: z.boolean().default(false),
+        debug: z.boolean().default(sokoConfig.debug),
+      })
+      .safeParse(opts);
+
+    if (!optsParsingResult.success) {
+      console.error(LOG_COLORS.error, "❌ Invalid arguments");
+      process.exitCode = 1;
+      return;
+    }
+
+    const releaseStorageProvider = new S3BucketProvider({
+      bucketName: sokoConfig.storageConfiguration.awsBucketName,
+      bucketRegion: sokoConfig.storageConfiguration.awsRegion,
+      accessKeyId: sokoConfig.storageConfiguration.awsAccessKeyId,
+      secretAccessKey: sokoConfig.storageConfiguration.awsSecretAccessKey,
+    });
+
+    console.log(
+      LOG_COLORS.log,
+      `\nPushing release "${optsParsingResult.data.release}" artifact to the release storage`,
+    );
+
+    const pushResult = await toAsyncResult(
+      pushRelease(
+        optsParsingResult.data.release,
+        optsParsingResult.data,
+        releaseStorageProvider,
+      ),
+      { debug: optsParsingResult.data.debug },
+    );
+    if (!pushResult.success) {
+      if (pushResult.error instanceof ScriptError) {
+        console.log(LOG_COLORS.error, "❌ ", pushResult.error.message);
+        process.exitCode = 1;
+        return;
+      }
+      console.log(
+        LOG_COLORS.error,
+        "❌ An unexpected error occurred: ",
+        pushResult.error,
+      );
+      process.exitCode = 1;
+      return;
+    }
+    console.log(
+      LOG_COLORS.success,
+      `\nRelease "${optsParsingResult.data.release}" pushed successfully`,
+    );
   });
 
 async function initiateGeneratedFolder(

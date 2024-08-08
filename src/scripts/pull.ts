@@ -5,6 +5,7 @@ import { ReleaseStorageProvider } from "../s3-bucket-provider";
 
 /**
  * Pulls releases from an S3 bucket
+ * @param sokoDirectory The Soko directory
  * @param opts.force Whether to force the pull
  * @param opts.release A specific release to pull
  * @param opts.debug Whether to enable debug mode
