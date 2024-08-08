@@ -12,22 +12,11 @@ import {
 import { retrieveReleasesSummary } from "./scripts/retrieve-releases-summary";
 import { S3BucketProvider } from "./s3-bucket-provider";
 import { pull } from "./scripts/pull";
-import { generateReleasesSummary } from "./scripts/generate-releases-summary";
-
-export async function addFile() {
-  await fs.mkdir("./.soko", { recursive: true });
-  const key = `./.soko/local-file-test-${Date.now()}.txt`;
-  await fs.writeFile(key, "Hello World!");
-}
-
-export async function listFiles() {
-  const files = await fs.readdir("./.soko");
-  console.log(files);
-}
-
-export async function clearFiles() {
-  await fs.rm(".soko", { recursive: true });
-}
+import {
+  generateEmptyReleasesSummaryTsContent,
+  generateEmptyReleasesSummaryJsonContent,
+  generateReleasesSummary,
+} from "./scripts/generate-releases-summary";
 
 declare module "hardhat/types/config" {
   export interface HardhatUserConfig {
@@ -39,6 +28,7 @@ declare module "hardhat/types/config" {
         awsAccessKeyId: string;
         awsSecretAccessKey: string;
       };
+      debug?: boolean;
     };
   }
 
@@ -51,11 +41,12 @@ declare module "hardhat/types/config" {
         awsAccessKeyId: string;
         awsSecretAccessKey: string;
       };
+      debug: boolean;
     };
   }
 }
 
-const SOKO_DIRECTORY = ".soko";
+const SOKO_DIRECTORY = "./.soko";
 
 extendConfig(
   async (config: HardhatConfig, userConfig: Readonly<HardhatUserConfig>) => {
@@ -66,7 +57,6 @@ extendConfig(
 
     const sokoParsingResult = z
       .object({
-        debug: z.boolean().default(false),
         storageConfiguration: z.object({
           type: z.literal("aws"),
           awsRegion: z.string().min(1),
@@ -74,6 +64,7 @@ extendConfig(
           awsAccessKeyId: z.string().min(1),
           awsSecretAccessKey: z.string().min(1),
         }),
+        debug: z.boolean().default(false),
       })
       .safeParse(userConfig.soko);
 
@@ -91,7 +82,9 @@ extendConfig(
     const sokoDirectoryStat = await fs.stat(SOKO_DIRECTORY).catch(() => null);
     if (sokoDirectoryStat === null) {
       const generatedFolderInitResult = await toAsyncResult(
-        initiateGeneratedFolder(SOKO_DIRECTORY, { debug: false }),
+        initiateGeneratedFolder(SOKO_DIRECTORY, {
+          debug: sokoParsingResult.data.debug,
+        }),
         { debug: sokoParsingResult.data.debug },
       );
       if (!generatedFolderInitResult.success) {
@@ -157,6 +150,15 @@ extendConfig(
 const sokoScope = scope("soko", "Soko Hardhat tasks");
 
 sokoScope
+  .task("help", "Use `npx hardhat help soko` instead")
+  .setAction(async () => {
+    console.log(
+      LOG_COLORS.log,
+      "This help format is not supported by Hardhat.\nPlease use `npx hardhat help soko` instead (change `npx` with what you use).\nHelp on a specific task can be obtained by using `npx hardhat help soko <command>`.",
+    );
+  });
+
+sokoScope
   .task(
     "pull",
     "Pull the missing releases from the release storage and generate associated typings",
@@ -196,7 +198,7 @@ sokoScope
         force: z.boolean().default(false),
         noTypingGeneration: z.boolean().default(false),
         noFilter: z.boolean().default(false),
-        debug: z.boolean().default(false),
+        debug: z.boolean().default(sokoConfig.debug),
       })
       .safeParse(opts);
     if (!optsParsingResult.success) {
@@ -297,11 +299,18 @@ sokoScope
   .task("generate-typings", "Generate typings based on the existing releases")
   .addFlag("noFilter", "Do not filter similar contract in subsequent releases")
   .addFlag("debug", "Enable debug mode")
-  .setAction(async (opts) => {
+  .setAction(async (opts, hre) => {
+    const sokoConfig = hre.config.soko;
+    if (!sokoConfig) {
+      console.error("❌ Soko is not configured.");
+      process.exitCode = 1;
+      return;
+    }
+
     const parsingResult = z
       .object({
         noFilter: z.boolean().default(false),
-        debug: z.boolean().default(false),
+        debug: z.boolean().default(sokoConfig.debug),
       })
       .safeParse(opts);
 
@@ -344,10 +353,17 @@ sokoScope
 sokoScope
   .task("describe", "Describe releases and their contents")
   .addFlag("debug", "Enable debug mode")
-  .setAction(async (opts) => {
+  .setAction(async (opts, hre) => {
+    const sokoConfig = hre.config.soko;
+    if (!sokoConfig) {
+      console.error("❌ Soko is not configured.");
+      process.exitCode = 1;
+      return;
+    }
+
     const parsingResult = z
       .object({
-        debug: z.boolean().default(false),
+        debug: z.boolean().default(sokoConfig.debug),
       })
       .safeParse(opts);
 
@@ -420,7 +436,7 @@ async function initiateGeneratedFolder(
 
   // Create the generated folder
   const creationDirResult = await toAsyncResult(
-    fs.mkdir(`${sokoDirectory}/generated`),
+    fs.mkdir(`${sokoDirectory}/generated`, { recursive: true }),
     opts,
   );
   if (!creationDirResult.success) {
@@ -429,27 +445,11 @@ async function initiateGeneratedFolder(
     );
   }
 
-  const SUMMARY_TS_CONTENT = `// THIS IS AN AUTOGENERATED FILE. EDIT AT YOUR OWN RISKS.
-
-export const CONTRACTS = {} as const;
-
-export const RELEASES = {} as const;`;
-
-  const TYPINGS_TS_CONTENT = `// THIS IS AN AUTOGENERATED FILE. EDIT AT YOUR OWN RISKS.
-
-import { CONTRACTS, RELEASES } from "./summary";
-
-export type Contract = keyof typeof CONTRACTS;
-export type Release = keyof typeof RELEASES;
-
-export type AvailableReleaseForContract<TContract extends Contract> =
-  (typeof CONTRACTS)[TContract][number];
-
-export type AvailableContractForRelease<TRelease extends Release> =
-  (typeof RELEASES)[TRelease][number];`;
-
   const tsSummaryResult = await toAsyncResult(
-    fs.writeFile(`${sokoDirectory}/generated/summary.ts`, SUMMARY_TS_CONTENT),
+    fs.writeFile(
+      `${sokoDirectory}/generated/summary.ts`,
+      generateEmptyReleasesSummaryTsContent(sokoDirectory),
+    ),
     opts,
   );
   if (!tsSummaryResult.success) {
@@ -458,7 +458,10 @@ export type AvailableContractForRelease<TRelease extends Release> =
     );
   }
   const typingResult = await toAsyncResult(
-    fs.writeFile(`${sokoDirectory}/generated/typings.ts`, TYPINGS_TS_CONTENT),
+    fs.writeFile(
+      `${sokoDirectory}/generated/typings.ts`,
+      await fs.readFile(`${__dirname}/typings.txt`, "utf-8"),
+    ),
     opts,
   );
   if (!typingResult.success) {
@@ -469,7 +472,11 @@ export type AvailableContractForRelease<TRelease extends Release> =
   const jsonSummaryResult = await toAsyncResult(
     fs.writeFile(
       `${sokoDirectory}/generated/summary.json`,
-      JSON.stringify({ contracts: {}, releases: {} }),
+      JSON.stringify(
+        generateEmptyReleasesSummaryJsonContent(sokoDirectory),
+        null,
+        2,
+      ),
     ),
     opts,
   );
