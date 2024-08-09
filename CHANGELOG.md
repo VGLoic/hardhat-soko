@@ -1,5 +1,11 @@
 # hardhat-soko
 
+## 0.3.0
+
+### Minor Changes
+
+- 47e6107: Set up Hardhat tasks
+
 ## 0.2.0
 
 ### Minor Changes
