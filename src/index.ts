@@ -18,6 +18,7 @@ import {
   generateReleasesSummary,
 } from "./scripts/generate-releases-summary";
 import { pushRelease } from "./scripts/push";
+import { generateDiffWithTargetRelease } from "./scripts/diff";
 
 declare module "hardhat/types/config" {
   export interface HardhatUserConfig {
@@ -494,6 +495,76 @@ sokoScope
       LOG_COLORS.success,
       `\nRelease "${optsParsingResult.data.release}" pushed successfully`,
     );
+  });
+
+sokoScope
+  .task(
+    "diff",
+    "Compare a local compilation artifacts with an existing release",
+  )
+  .addParam("release", "The release to compare with")
+  .addFlag("debug", "Enable debug mode")
+  .setAction(async (opts, hre) => {
+    const sokoConfig = hre.config.soko;
+    if (!sokoConfig) {
+      console.error("❌ Soko is not configured.");
+      process.exitCode = 1;
+      return;
+    }
+
+    const paramParsingResult = z
+      .object({
+        release: z.string().min(1),
+        debug: z.boolean().default(sokoConfig.debug),
+      })
+      .safeParse(opts);
+    if (!paramParsingResult.success) {
+      console.error(LOG_COLORS.error, "❌ Invalid arguments");
+      process.exitCode = 1;
+      return;
+    }
+
+    console.log(
+      LOG_COLORS.log,
+      `\nComparing the current compilation with the "${paramParsingResult.data.release}" release`,
+    );
+
+    const differencesResult = await toAsyncResult(
+      generateDiffWithTargetRelease(
+        SOKO_DIRECTORY,
+        paramParsingResult.data.release,
+        {
+          debug: paramParsingResult.data.debug,
+        },
+      ),
+    );
+    if (!differencesResult.success) {
+      if (differencesResult.error instanceof ScriptError) {
+        console.log(LOG_COLORS.error, "❌ ", differencesResult.error.message);
+        process.exitCode = 1;
+        return;
+      }
+      console.log(
+        LOG_COLORS.error,
+        "❌ An unexpected error occurred: ",
+        differencesResult.error,
+      );
+      process.exitCode = 1;
+      return;
+    }
+
+    if (differencesResult.value.length === 0) {
+      console.log(LOG_COLORS.success, "\nNo differences found");
+      return;
+    }
+
+    console.log(LOG_COLORS.success, "\nDifferences found:");
+    for (const difference of differencesResult.value) {
+      console.log(
+        LOG_COLORS.success,
+        ` - ${difference.name} (${difference.path}): ${difference.status}`,
+      );
+    }
   });
 
 async function initiateGeneratedFolder(
