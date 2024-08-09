@@ -286,17 +286,23 @@ sokoScope
         {
           debug: optsParsingResult.data.debug,
         },
-      ).catch((err) => {
-        if (err instanceof ScriptError) {
-          console.log(LOG_COLORS.error, "❌ ", err.message);
+      )
+        .then(() => {
+          console.log(LOG_COLORS.success, "\nTypings generated successfully\n");
+        })
+        .catch((err) => {
+          if (err instanceof ScriptError) {
+            console.log(LOG_COLORS.error, "❌ ", err.message);
+            process.exitCode = 1;
+            return;
+          }
+          console.log(
+            LOG_COLORS.error,
+            "❌ An unexpected error occurred: ",
+            err,
+          );
           process.exitCode = 1;
-          return;
-        }
-        console.log(LOG_COLORS.error, "❌ An unexpected error occurred: ", err);
-        process.exitCode = 1;
-      });
-
-      console.log(LOG_COLORS.success, "\nTypings generated successfully\n");
+        });
     }
   });
 
@@ -345,17 +351,19 @@ sokoScope
       {
         debug: parsingResult.data.debug,
       },
-    ).catch((err) => {
-      if (err instanceof ScriptError) {
-        console.log(LOG_COLORS.error, "❌ ", err.message);
+    )
+      .then(() => {
+        console.log(LOG_COLORS.success, "\nTypings generated successfully\n");
+      })
+      .catch((err) => {
+        if (err instanceof ScriptError) {
+          console.log(LOG_COLORS.error, "❌ ", err.message);
+          process.exitCode = 1;
+          return;
+        }
+        console.log(LOG_COLORS.error, "❌ An unexpected error occurred: ", err);
         process.exitCode = 1;
-        return;
-      }
-      console.log(LOG_COLORS.error, "❌ An unexpected error occurred: ", err);
-      process.exitCode = 1;
-    });
-
-    console.log(LOG_COLORS.success, "\nTypings generated successfully\n");
+      });
   });
 
 sokoScope
