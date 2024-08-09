@@ -198,6 +198,9 @@ sokoScope
       .safeParse(opts);
     if (!optsParsingResult.success) {
       console.log(LOG_COLORS.error, "❌ Invalid arguments");
+      if (sokoConfig.debug || opts.debug) {
+        console.error(optsParsingResult.error);
+      }
       process.exitCode = 1;
       return;
     }
@@ -318,6 +321,9 @@ sokoScope
 
     if (!parsingResult.success) {
       console.error(LOG_COLORS.error, "❌ Invalid arguments");
+      if (sokoConfig.debug || opts.debug) {
+        console.error(parsingResult.error);
+      }
       process.exitCode = 1;
       return;
     }
@@ -371,6 +377,9 @@ sokoScope
 
     if (!parsingResult.success) {
       console.error(LOG_COLORS.error, "❌ Invalid arguments");
+      if (sokoConfig.debug || opts.debug) {
+        console.error(parsingResult.error);
+      }
       process.exitCode = 1;
       return;
     }
@@ -453,6 +462,9 @@ sokoScope
 
     if (!optsParsingResult.success) {
       console.error(LOG_COLORS.error, "❌ Invalid arguments");
+      if (sokoConfig.debug || opts.debug) {
+        console.error(optsParsingResult.error);
+      }
       process.exitCode = 1;
       return;
     }
@@ -520,6 +532,9 @@ sokoScope
       .safeParse(opts);
     if (!paramParsingResult.success) {
       console.error(LOG_COLORS.error, "❌ Invalid arguments");
+      if (sokoConfig.debug || opts.debug) {
+        console.error(paramParsingResult.error);
+      }
       process.exitCode = 1;
       return;
     }
