@@ -14,6 +14,7 @@ declare module "hardhat/types/config" {
   export interface HardhatUserConfig {
     soko?: {
       directory?: string;
+      typingsDirectory?: string;
       storageConfiguration: {
         type: "aws";
         awsRegion: string;
@@ -28,6 +29,7 @@ declare module "hardhat/types/config" {
   export interface HardhatConfig {
     soko?: {
       directory: string;
+      typingsDirectory: string;
       storageConfiguration: {
         type: "aws";
         awsRegion: string;
@@ -50,6 +52,7 @@ extendConfig(
     const sokoParsingResult = z
       .object({
         directory: z.string().default(".soko"),
+        typingsDirectory: z.string().default(".soko-typings"),
         storageConfiguration: z.object({
           type: z.literal("aws"),
           awsRegion: z.string().min(1),
@@ -213,6 +216,7 @@ sokoScope
     if (!optsParsingResult.data.noTypingGeneration) {
       await generateReleasesSummariesAndTypings(
         sokoConfig.directory,
+        sokoConfig.typingsDirectory,
         !optsParsingResult.data.noFilter,
         {
           debug: optsParsingResult.data.debug,
@@ -278,6 +282,7 @@ sokoScope
 
     await generateReleasesSummariesAndTypings(
       sokoConfig.directory,
+      sokoConfig.typingsDirectory,
       !parsingResult.data.noFilter,
       {
         debug: parsingResult.data.debug,
@@ -298,7 +303,10 @@ sokoScope
   });
 
 sokoScope
-  .task("describe", "Describe releases and their contents")
+  .task(
+    "describe",
+    "Describe releases and their contents (based on what has been pulled)",
+  )
   .addFlag("debug", "Enable debug mode")
   .setAction(async (opts, hre) => {
     const sokoConfig = hre.config.soko;
@@ -324,7 +332,7 @@ sokoScope
     }
 
     const releasesSummaryResult = await toAsyncResult(
-      retrieveReleasesSummary(sokoConfig.directory, {
+      retrieveReleasesSummary(sokoConfig.typingsDirectory, {
         debug: parsingResult.data.debug,
       }),
       { debug: parsingResult.data.debug },

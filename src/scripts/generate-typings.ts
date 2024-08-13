@@ -3,7 +3,7 @@ import { ZBuildInfo, toAsyncResult, LOG_COLORS, ScriptError } from "../utils";
 import { createHash } from "crypto";
 
 /**
- * Based from the `releases` folder content, generate a `summary.ts`, a `summary.json` and a `typings.ts` files in `<Soko directory>/generated` folder.
+ * Based from the Soko releases folder content, generate a `summary.ts`, a `summary.json` and a `index.ts` files in the Soko typings folder.
  * This file contains two constants:
  * - `Contracts` of the form:
  * ```ts
@@ -29,27 +29,48 @@ import { createHash } from "crypto";
  */
 export async function generateReleasesSummariesAndTypings(
   sokoDirectory: string,
+  sokoTypingsDirectory: string,
   filterSimilarContracts: boolean,
   opts: { debug?: boolean } = {},
 ) {
-  // Check if the `releases` folder exists
+  // Check if the typings folder exists
+  const doesTypingsFolderExist = await fs
+    .stat(sokoTypingsDirectory)
+    .catch(() => false);
+  if (!doesTypingsFolderExist) {
+    console.log(
+      LOG_COLORS.log,
+      "\nThe directory containing the Soko typings has not been found, initializing it.",
+    );
+    const typingsDirCreationResult = await toAsyncResult(
+      fs.mkdir(sokoTypingsDirectory, { recursive: true }),
+      { debug: opts.debug },
+    );
+    if (!typingsDirCreationResult.success) {
+      throw new ScriptError(
+        `Error creating the local Soko typings directory ${sokoDirectory}`,
+      );
+    }
+  }
+  // Check if the releases folder exists
   const doesReleasesFolderExist = await fs
     .stat(sokoDirectory)
     .catch(() => false);
   if (!doesReleasesFolderExist) {
     console.log(
       LOG_COLORS.warn,
-      "\nThe local Soko directory has not been found, initializing it.",
+      "\nThe local Soko directory has not been found, default typings will be generated.\nRun the `pull` command if you wish to retrieve the releases and generate the accurate typings.",
     );
-    const dirCreationResult = await toAsyncResult(
-      fs.mkdir(`${sokoDirectory}/generated`, { recursive: true }),
-      { debug: opts.debug },
+    const emptyTypingsResult = await toAsyncResult(
+      writeEmptySummaries(sokoDirectory, sokoTypingsDirectory, opts),
+      opts,
     );
-    if (!dirCreationResult.success) {
-      throw new ScriptError(
-        `Error creating the local Soko directory ${sokoDirectory}`,
-      );
+
+    if (!emptyTypingsResult.success) {
+      throw new ScriptError("Error generating default typings");
     }
+
+    return;
   }
 
   // Get the list of releases as directories in the sokoDirectory folder
@@ -75,7 +96,17 @@ export async function generateReleasesSummariesAndTypings(
       LOG_COLORS.warn,
       "\nNo local releases have been found. Generating an empty summary.",
     );
-    await writeEmptySummaries(sokoDirectory, opts);
+
+    const emptySummariesResult = await toAsyncResult(
+      writeEmptySummaries(sokoDirectory, sokoTypingsDirectory, opts),
+      opts,
+    );
+    if (!emptySummariesResult.success) {
+      throw new ScriptError(
+        "Error creating default typings when no releases have been found",
+      );
+    }
+
     return;
   }
 
@@ -185,13 +216,9 @@ export async function generateReleasesSummariesAndTypings(
   }
   releasesSummary += `} as const;\n`;
 
-  await fs
-    .mkdir(`${sokoDirectory}/generated`, { recursive: true })
-    .catch(() => {});
-
   // Write the `summary.ts` file
   const writeTsResult = await toAsyncResult(
-    fs.writeFile(`${sokoDirectory}/generated/summary.ts`, releasesSummary),
+    fs.writeFile(`${sokoTypingsDirectory}/summary.ts`, releasesSummary),
     { debug: opts.debug },
   );
   if (!writeTsResult.success) {
@@ -202,7 +229,7 @@ export async function generateReleasesSummariesAndTypings(
   // Write the `summary.json` file
   const writeJsonResult = await toAsyncResult(
     fs.writeFile(
-      `${sokoDirectory}/generated/summary.json`,
+      `${sokoTypingsDirectory}/summary.json`,
       JSON.stringify(
         {
           sokoDirectory: sokoDirectory,
@@ -218,6 +245,18 @@ export async function generateReleasesSummariesAndTypings(
   if (!writeJsonResult.success) {
     throw new ScriptError(
       `Error writing the summary.json file: ${writeJsonResult.error}`,
+    );
+  }
+  const writeTypingsResult = await toAsyncResult(
+    fs.writeFile(
+      `${sokoTypingsDirectory}/index.ts`,
+      await fs.readFile(`${__dirname}/typings.txt`, "utf-8"),
+    ),
+    { debug: opts.debug },
+  );
+  if (!writeTypingsResult.success) {
+    throw new Error(
+      `Error writing the index.ts file: ${writeTypingsResult.error}`,
     );
   }
 }
@@ -308,11 +347,12 @@ function generateEmptyReleasesSummaryJsonContent(sokoDirectory: string) {
 
 async function writeEmptySummaries(
   sokoDirectory: string,
+  sokoTypingsDirectory: string,
   opts: { debug?: boolean } = {},
 ) {
   const writeEmptyTsSummaryResult = await toAsyncResult(
     fs.writeFile(
-      `${sokoDirectory}/generated/summary.ts`,
+      `${sokoTypingsDirectory}/summary.ts`,
       generateEmptyReleasesSummaryTsContent(sokoDirectory),
     ),
     { debug: opts.debug },
@@ -324,7 +364,7 @@ async function writeEmptySummaries(
   }
   const writeEmptyJsonResult = await toAsyncResult(
     fs.writeFile(
-      `${sokoDirectory}/generated/summary.json`,
+      `${sokoTypingsDirectory}/summary.json`,
       JSON.stringify(
         generateEmptyReleasesSummaryJsonContent(sokoDirectory),
         null,
@@ -338,16 +378,16 @@ async function writeEmptySummaries(
       `Error writing the summary.json file: ${writeEmptyJsonResult.error}`,
     );
   }
-  const writeEmptyTypingsResult = await toAsyncResult(
+  const writeTypingsResult = await toAsyncResult(
     fs.writeFile(
-      `${sokoDirectory}/generated/typings.ts`,
+      `${sokoTypingsDirectory}/index.ts`,
       await fs.readFile(`${__dirname}/typings.txt`, "utf-8"),
     ),
     { debug: opts.debug },
   );
-  if (!writeEmptyTypingsResult.success) {
+  if (!writeTypingsResult.success) {
     throw new Error(
-      `Error writing the typings.ts file: ${writeEmptyTypingsResult.error}`,
+      `Error writing the index.ts file: ${writeTypingsResult.error}`,
     );
   }
 }

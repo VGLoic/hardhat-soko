@@ -3,27 +3,27 @@ import { toAsyncResult, ScriptError } from "../utils";
 import { z } from "zod";
 
 export async function retrieveReleasesSummary(
-  sokoDirectory: string,
+  sokoTypingsDirectory: string,
   opts: { debug?: boolean } = {},
 ) {
-  const releasesExist = await fs.stat(sokoDirectory).catch(() => false);
-  if (!releasesExist) {
+  const typingsExist = await fs.stat(sokoTypingsDirectory).catch(() => false);
+  if (!typingsExist) {
     throw new ScriptError(
-      "Releases not found locally. Please run the `pull` command first.",
+      "Soko typings not found locally. Please run the `typings` command first.",
     );
   }
-  const generatedReleasesSummaryExist = await fs
-    .stat(`${sokoDirectory}/generated/summary.json`)
+  const jsonSummaryExist = await fs
+    .stat(`${sokoTypingsDirectory}/summary.json`)
     .catch(() => false);
-  if (!generatedReleasesSummaryExist) {
+  if (!jsonSummaryExist) {
     throw new ScriptError(
-      "Soko typings not found, this command uses it as a shortcut. Please run the `typings` command first.",
+      "The `summary.json` is missing from the typings directory. Please run the `typings` command first.",
     );
   }
 
   const releasesSummaryResult = await toAsyncResult(
     fs
-      .readFile(`${sokoDirectory}/generated/summary.json`, "utf-8")
+      .readFile(`${sokoTypingsDirectory}/summary.json`, "utf-8")
       .then(JSON.parse)
       .then((data) => {
         return z
