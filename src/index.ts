@@ -10,35 +10,47 @@ import { generateReleasesSummariesAndTypings } from "./scripts/generate-typings"
 import { pushRelease } from "./scripts/push";
 import { generateDiffWithTargetRelease } from "./scripts/diff";
 
+type SokoHardhatUserConfig = {
+  // Local directory in which releases will be pulled
+  // Default to `.soko`
+  directory?: string;
+  // Local directory in which typings will be generated
+  // Default to `.soko-typings`
+  typingsDirectory?: string;
+  // Configuration of the storage where the release will be stored
+  // Only AWS is supported for now
+  storageConfiguration: {
+    type: "aws";
+    awsRegion: string;
+    awsBucketName: string;
+    awsAccessKeyId: string;
+    awsSecretAccessKey: string;
+  };
+  // If enabled, all tasks are running with activated debug mode
+  // Default to `false`
+  debug?: boolean;
+};
+
+const SokoHardhatConfig = z.object({
+  directory: z.string().default(".soko"),
+  typingsDirectory: z.string().default(".soko-typings"),
+  storageConfiguration: z.object({
+    type: z.literal("aws"),
+    awsRegion: z.string().min(1),
+    awsBucketName: z.string().min(1),
+    awsAccessKeyId: z.string().min(1),
+    awsSecretAccessKey: z.string().min(1),
+  }),
+  debug: z.boolean().default(false),
+});
+
 declare module "hardhat/types/config" {
   export interface HardhatUserConfig {
-    soko?: {
-      directory?: string;
-      typingsDirectory?: string;
-      storageConfiguration: {
-        type: "aws";
-        awsRegion: string;
-        awsBucketName: string;
-        awsAccessKeyId: string;
-        awsSecretAccessKey: string;
-      };
-      debug?: boolean;
-    };
+    soko?: SokoHardhatUserConfig;
   }
 
   export interface HardhatConfig {
-    soko?: {
-      directory: string;
-      typingsDirectory: string;
-      storageConfiguration: {
-        type: "aws";
-        awsRegion: string;
-        awsBucketName: string;
-        awsAccessKeyId: string;
-        awsSecretAccessKey: string;
-      };
-      debug: boolean;
-    };
+    soko?: z.infer<typeof SokoHardhatConfig>;
   }
 }
 
@@ -49,20 +61,7 @@ extendConfig(
       return;
     }
 
-    const sokoParsingResult = z
-      .object({
-        directory: z.string().default(".soko"),
-        typingsDirectory: z.string().default(".soko-typings"),
-        storageConfiguration: z.object({
-          type: z.literal("aws"),
-          awsRegion: z.string().min(1),
-          awsBucketName: z.string().min(1),
-          awsAccessKeyId: z.string().min(1),
-          awsSecretAccessKey: z.string().min(1),
-        }),
-        debug: z.boolean().default(false),
-      })
-      .safeParse(userConfig.soko);
+    const sokoParsingResult = SokoHardhatConfig.safeParse(userConfig.soko);
 
     if (!sokoParsingResult.success) {
       console.warn(
@@ -80,15 +79,6 @@ extendConfig(
 );
 
 const sokoScope = scope("soko", "Soko Hardhat tasks");
-
-sokoScope
-  .task("help", "Use `npx hardhat help soko` instead")
-  .setAction(async () => {
-    console.log(
-      LOG_COLORS.log,
-      "This help format is not supported by Hardhat.\nPlease use `npx hardhat help soko` instead (change `npx` with what you use).\nHelp on a specific task can be obtained by using `npx hardhat help soko <command>`.",
-    );
-  });
 
 sokoScope
   .task(
@@ -242,6 +232,79 @@ sokoScope
   });
 
 sokoScope
+  .task("push", "Push a release to the release storage")
+  .addParam("release", "The release to push to the release storage")
+  .addFlag(
+    "force",
+    "Force the push of the release even if it already exists in the release storage",
+  )
+  .addFlag("debug", "Enable debug mode")
+  .setAction(async (opts, hre) => {
+    const sokoConfig = hre.config.soko;
+    if (!sokoConfig) {
+      console.error("❌ Soko is not configured.");
+      process.exitCode = 1;
+      return;
+    }
+
+    const optsParsingResult = z
+      .object({
+        release: z.string().min(1),
+        force: z.boolean().default(false),
+        debug: z.boolean().default(sokoConfig.debug),
+      })
+      .safeParse(opts);
+
+    if (!optsParsingResult.success) {
+      console.error(LOG_COLORS.error, "❌ Invalid arguments");
+      if (sokoConfig.debug || opts.debug) {
+        console.error(optsParsingResult.error);
+      }
+      process.exitCode = 1;
+      return;
+    }
+
+    const releaseStorageProvider = new S3BucketProvider({
+      bucketName: sokoConfig.storageConfiguration.awsBucketName,
+      bucketRegion: sokoConfig.storageConfiguration.awsRegion,
+      accessKeyId: sokoConfig.storageConfiguration.awsAccessKeyId,
+      secretAccessKey: sokoConfig.storageConfiguration.awsSecretAccessKey,
+    });
+
+    console.log(
+      LOG_COLORS.log,
+      `\nPushing release "${optsParsingResult.data.release}" artifact to the release storage`,
+    );
+
+    const pushResult = await toAsyncResult(
+      pushRelease(
+        optsParsingResult.data.release,
+        optsParsingResult.data,
+        releaseStorageProvider,
+      ),
+      { debug: optsParsingResult.data.debug },
+    );
+    if (!pushResult.success) {
+      if (pushResult.error instanceof ScriptError) {
+        console.log(LOG_COLORS.error, "❌ ", pushResult.error.message);
+        process.exitCode = 1;
+        return;
+      }
+      console.log(
+        LOG_COLORS.error,
+        "❌ An unexpected error occurred: ",
+        pushResult.error,
+      );
+      process.exitCode = 1;
+      return;
+    }
+    console.log(
+      LOG_COLORS.success,
+      `\nRelease "${optsParsingResult.data.release}" pushed successfully`,
+    );
+  });
+
+sokoScope
   .task("typings", "Generate typings based on the existing releases")
   .addFlag("noFilter", "Do not filter similar contract in subsequent releases")
   .addFlag("debug", "Enable debug mode")
@@ -384,79 +447,6 @@ sokoScope
   });
 
 sokoScope
-  .task("push", "Push a release to the release storage")
-  .addParam("release", "The release to push to the release storage")
-  .addFlag(
-    "force",
-    "Force the push of the release even if it already exists in the release storage",
-  )
-  .addFlag("debug", "Enable debug mode")
-  .setAction(async (opts, hre) => {
-    const sokoConfig = hre.config.soko;
-    if (!sokoConfig) {
-      console.error("❌ Soko is not configured.");
-      process.exitCode = 1;
-      return;
-    }
-
-    const optsParsingResult = z
-      .object({
-        release: z.string().min(1),
-        force: z.boolean().default(false),
-        debug: z.boolean().default(sokoConfig.debug),
-      })
-      .safeParse(opts);
-
-    if (!optsParsingResult.success) {
-      console.error(LOG_COLORS.error, "❌ Invalid arguments");
-      if (sokoConfig.debug || opts.debug) {
-        console.error(optsParsingResult.error);
-      }
-      process.exitCode = 1;
-      return;
-    }
-
-    const releaseStorageProvider = new S3BucketProvider({
-      bucketName: sokoConfig.storageConfiguration.awsBucketName,
-      bucketRegion: sokoConfig.storageConfiguration.awsRegion,
-      accessKeyId: sokoConfig.storageConfiguration.awsAccessKeyId,
-      secretAccessKey: sokoConfig.storageConfiguration.awsSecretAccessKey,
-    });
-
-    console.log(
-      LOG_COLORS.log,
-      `\nPushing release "${optsParsingResult.data.release}" artifact to the release storage`,
-    );
-
-    const pushResult = await toAsyncResult(
-      pushRelease(
-        optsParsingResult.data.release,
-        optsParsingResult.data,
-        releaseStorageProvider,
-      ),
-      { debug: optsParsingResult.data.debug },
-    );
-    if (!pushResult.success) {
-      if (pushResult.error instanceof ScriptError) {
-        console.log(LOG_COLORS.error, "❌ ", pushResult.error.message);
-        process.exitCode = 1;
-        return;
-      }
-      console.log(
-        LOG_COLORS.error,
-        "❌ An unexpected error occurred: ",
-        pushResult.error,
-      );
-      process.exitCode = 1;
-      return;
-    }
-    console.log(
-      LOG_COLORS.success,
-      `\nRelease "${optsParsingResult.data.release}" pushed successfully`,
-    );
-  });
-
-sokoScope
   .task(
     "diff",
     "Compare a local compilation artifacts with an existing release",
@@ -527,4 +517,13 @@ sokoScope
         ` - ${difference.name} (${difference.path}): ${difference.status}`,
       );
     }
+  });
+
+sokoScope
+  .task("help", "Use `npx hardhat help soko` instead")
+  .setAction(async () => {
+    console.log(
+      LOG_COLORS.log,
+      "This help format is not supported by Hardhat.\nPlease use `npx hardhat help soko` instead (change `npx` with what you use).\nHelp on a specific task can be obtained by using `npx hardhat help soko <command>`.",
+    );
   });

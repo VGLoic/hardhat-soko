@@ -15,10 +15,10 @@ export type AvailableContractForRelease<TRelease extends Release> =
 type FallbackString = string & {};
 /**
  * Utility functions for a given contract
- * @param contractKey Key of the contract formatted as "path/to/Contract.sol/Contract"
+ * @param contractKey Key of the contract formatted as "path/to/Contract.sol:Contract"
  * @returns Utility functions for the given contract
  * @example ```typescript
- * const counterUtils = contract("src/Counter.sol/Counter");
+ * const counterUtils = contract("src/Counter.sol:Counter");
  * const availableReleases = counterUtils.getAvailableReleases();
  * const counterArtifact = await counterUtils.getArtifact("v1.3.1");
  * ```
@@ -29,10 +29,10 @@ export function contract<TContract extends Contract | FallbackString>(
   return {
     /**
      * Retrieve the contract artifact for a given release
-     * @param release Target release
+     * @param release Release name
      * @returns The contract artifact
      * @example ```typescript
-     * const counterArtifact = await contract("src/Counter.sol/Counter").getArtifact("v1.3.1");
+     * const counterArtifact = await contract("src/Counter.sol:Counter").getArtifact("v1.3.1");
      * ```
      */
     getArtifact(
@@ -64,24 +64,24 @@ export function contract<TContract extends Contract | FallbackString>(
 
 /**
  * Utility functions for a given release
- * @param releaseKey Key of the release
+ * @param release Release name
  * @returns Utility functions for the given release
  * @example ```typescript
  * const v1_3_1Utils = release("v1.3.1");
  * const availableContracts = v1_3_1Utils.getAvailableContracts();
- * const incrementOracleArtifact = await v1_3_1Utils.getContractArtifact("src/IncrementOracle.sol/IncrementOracle");
+ * const incrementOracleArtifact = await v1_3_1Utils.getContractArtifact("src/IncrementOracle.sol:IncrementOracle");
  * ```
  */
 export function release<TRelease extends Release | FallbackString>(
-  releaseKey: TRelease,
+  release: TRelease,
 ) {
   return {
     /**
      * Retrieve the contract artifact for a given contract
-     * @param contractKey Key of the contract formatted as "path/to/Contract.sol/Contract"
+     * @param contractKey Key of the contract formatted as "path/to/Contract.sol:Contract"
      * @returns The contract artifact
      * @example ```typescript
-     * const incrementOracleArtifact = await release("v1.3.1").getContractArtifact("src/IncrementOracle.sol/IncrementOracle");
+     * const incrementOracleArtifact = await release("v1.3.1").getContractArtifact("src/IncrementOracle.sol:IncrementOracle");
      * ```
      */
     getContractArtifact(
@@ -89,7 +89,7 @@ export function release<TRelease extends Release | FallbackString>(
         ? AvailableContractForRelease<TRelease>
         : string,
     ) {
-      return getArtifact(contractKey, releaseKey);
+      return getArtifact(contractKey, release);
     },
     /**
      * Get the available contracts for the release
@@ -98,18 +98,21 @@ export function release<TRelease extends Release | FallbackString>(
     getAvailableContracts: (): TRelease extends Release
       ? (typeof RELEASES)[TRelease]
       : string[] => {
-      if (releaseKey in RELEASES) {
+      if (release in RELEASES) {
         return RELEASES[
-          releaseKey as Release
+          release as Release
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ] as any;
       }
-      throw new Error(`Release not found for release: ${releaseKey}`);
+      throw new Error(`Release not found for release: ${release}`);
     },
   };
 }
 
-async function getArtifact(contractKey: string, release: string) {
+async function getArtifact(
+  contractKey: string,
+  release: string,
+): Promise<unknown> {
   const buildInfoResult = await toAsyncResult(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     getReleaseBuildInfo(release as any),
@@ -122,13 +125,13 @@ async function getArtifact(contractKey: string, release: string) {
   const contractName = contractPieces.at(-1);
   if (!contractName) {
     throw new Error(
-      `Invalid contract key: ${contractKey}. Expected format: "path/to/Contract.sol/Contract"`,
+      `Invalid contract key: ${contractKey}. Expected format: "path/to/Contract.sol:Contract"`,
     );
   }
-  const contractPath = contractPieces.slice(0, -1).join("/");
+  const contractPath = contractPieces.at(0);
   if (!contractPath) {
     throw new Error(
-      `Invalid contract key: ${contractKey}. Expected format: "path/to/Contract.sol/Contract"`,
+      `Invalid contract key: ${contractKey}. Expected format: "path/to/Contract.sol:Contract"`,
     );
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -143,6 +146,14 @@ async function getArtifact(contractKey: string, release: string) {
   return contractArtifact;
 }
 
+/**
+ * Get the artifact of a release
+ * @param release Name of the release
+ * @returns The build info content of the release
+ * @example ```typescript
+ * const releaseBuildInfo = await getReleaseBuildInfo("v1.3.1");
+ * ```
+ */
 export async function getReleaseBuildInfo(
   release: Release extends never ? string : Release,
 ): Promise<unknown> {
