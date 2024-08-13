@@ -4,6 +4,22 @@ Hardhat plugin in order to manage your smart contract artifacts from a remote lo
 
 ## Motivation
 
+When compiling the smart contracts, the developer will generate _compilation artifacts_ that contain all the needed informations for further tasks such as deployment, verification or simple contract interactions.
+
+These compilation artifacts are however generally ignored and not stored. At best, compilation artifact for a contract is contained within its deployment summary. Not having a clear way of identifying or re-using an artifact is a painful experience for all developers working closely or remotely with the smart contracts:
+
+- the smart contract developer is afraid of erasing artifacts that are still needed when developing new features,
+- the "smart contract devops" has to execute the deployment or interaction scripts with artifact that are meant to be thrown away, it complexifies drastically the sharing of ABIs and deployments to the rest of the team,
+- the developer using the deployed smart contracts often ends up copy pasting deployed addresses and ABIs without having a clear vision on it.
+
+**The goal of this plugin is to encourage the developer to organize the compilation artifacts by releases, hence freezing them once created. These artifacts would be stored on a dedicated storage in order to enable an easy conservation and retrieval.**
+
+Once the artifacts are kept safe on the storage, developers can easily leverage them in order to execute the same tasks as before but in a safer and clearer way:
+
+- deployment scripts depend only on frozen artifacts,
+- the artifact associated to a deployed contract can be easily found, hence allowing simple verification or interaction,
+- pipelines can be built using the stored artifacts in order to expose safely to other developers the ABIs and the deployed contracts.
+
 ## Installation
 
 Installation can be made using any package manager
