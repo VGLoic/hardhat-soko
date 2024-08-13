@@ -23,6 +23,7 @@ import { generateDiffWithTargetRelease } from "./scripts/diff";
 declare module "hardhat/types/config" {
   export interface HardhatUserConfig {
     soko?: {
+      directory?: string;
       storageConfiguration: {
         type: "aws";
         awsRegion: string;
@@ -36,6 +37,7 @@ declare module "hardhat/types/config" {
 
   export interface HardhatConfig {
     soko?: {
+      directory: string;
       storageConfiguration: {
         type: "aws";
         awsRegion: string;
@@ -48,8 +50,6 @@ declare module "hardhat/types/config" {
   }
 }
 
-const SOKO_DIRECTORY = "./.soko";
-
 extendConfig(
   async (config: HardhatConfig, userConfig: Readonly<HardhatUserConfig>) => {
     if (userConfig.soko === undefined) {
@@ -59,6 +59,7 @@ extendConfig(
 
     const sokoParsingResult = z
       .object({
+        directory: z.string().default(".soko"),
         storageConfiguration: z.object({
           type: z.literal("aws"),
           awsRegion: z.string().min(1),
@@ -81,10 +82,12 @@ extendConfig(
       return;
     }
 
-    const sokoDirectoryStat = await fs.stat(SOKO_DIRECTORY).catch(() => null);
+    const sokoDirectoryStat = await fs
+      .stat(sokoParsingResult.data.directory)
+      .catch(() => null);
     if (sokoDirectoryStat === null) {
       const generatedFolderInitResult = await toAsyncResult(
-        initiateGeneratedFolder(SOKO_DIRECTORY, {
+        initiateGeneratedFolder(sokoParsingResult.data.directory, {
           debug: sokoParsingResult.data.debug,
         }),
         { debug: sokoParsingResult.data.debug },
@@ -101,20 +104,20 @@ extendConfig(
     } else {
       if (!sokoDirectoryStat.isDirectory()) {
         console.warn(
-          `A file named "${SOKO_DIRECTORY}" exists in the root directory. Please remove it before continuing with Soko.`,
+          `A file named "${sokoParsingResult.data.directory}" exists in the root directory. Please remove it before continuing with Soko.`,
         );
         return;
       }
 
       // Check if there are the generated typings and summary files
       const generatedTypingStats = await fs
-        .stat(`${SOKO_DIRECTORY}/generated/typings.ts`)
+        .stat(`${sokoParsingResult.data.directory}/generated/typings.ts`)
         .catch(() => null);
       const generatedTsSummaryStats = await fs
-        .stat(`${SOKO_DIRECTORY}/generated/summary.ts`)
+        .stat(`${sokoParsingResult.data.directory}/generated/summary.ts`)
         .catch(() => null);
       const generatedJsonSummaryStats = await fs
-        .stat(`${SOKO_DIRECTORY}/generated/summary.json`)
+        .stat(`${sokoParsingResult.data.directory}/generated/summary.json`)
         .catch(() => null);
 
       if (
@@ -126,7 +129,7 @@ extendConfig(
           `The Soko directory exists but some of the generated files are missing. They will be regenerated using default values.`,
         );
         const generatedFolderInitResult = await toAsyncResult(
-          initiateGeneratedFolder(SOKO_DIRECTORY, {
+          initiateGeneratedFolder(sokoParsingResult.data.directory, {
             debug: sokoParsingResult.data.debug,
           }),
           {
@@ -225,7 +228,11 @@ sokoScope
     });
 
     const pullResult = await toAsyncResult(
-      pull(SOKO_DIRECTORY, optsParsingResult.data, releaseStorageProvider),
+      pull(
+        sokoConfig.directory,
+        optsParsingResult.data,
+        releaseStorageProvider,
+      ),
       { debug: optsParsingResult.data.debug },
     );
     if (!pullResult.success) {
@@ -281,7 +288,7 @@ sokoScope
 
     if (!optsParsingResult.data.noTypingGeneration) {
       await generateReleasesSummary(
-        SOKO_DIRECTORY,
+        sokoConfig.directory,
         !optsParsingResult.data.noFilter,
         {
           debug: optsParsingResult.data.debug,
@@ -346,7 +353,7 @@ sokoScope
     console.log("\n");
 
     await generateReleasesSummary(
-      SOKO_DIRECTORY,
+      sokoConfig.directory,
       !parsingResult.data.noFilter,
       {
         debug: parsingResult.data.debug,
@@ -393,7 +400,7 @@ sokoScope
     }
 
     const releasesSummaryResult = await toAsyncResult(
-      retrieveReleasesSummary(SOKO_DIRECTORY, {
+      retrieveReleasesSummary(sokoConfig.directory, {
         debug: parsingResult.data.debug,
       }),
       { debug: parsingResult.data.debug },
@@ -554,7 +561,7 @@ sokoScope
 
     const differencesResult = await toAsyncResult(
       generateDiffWithTargetRelease(
-        SOKO_DIRECTORY,
+        sokoConfig.directory,
         paramParsingResult.data.release,
         {
           debug: paramParsingResult.data.debug,
