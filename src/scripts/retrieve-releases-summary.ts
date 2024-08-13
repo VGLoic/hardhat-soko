@@ -17,7 +17,7 @@ export async function retrieveReleasesSummary(
     .catch(() => false);
   if (!generatedReleasesSummaryExist) {
     throw new ScriptError(
-      "Releases summary not found. Please run the `pull` command first.",
+      "Soko typings not found, this command uses it as a shortcut. Please run the `typings` command first.",
     );
   }
 
@@ -38,7 +38,7 @@ export async function retrieveReleasesSummary(
 
   if (!releasesSummaryResult.success) {
     throw new ScriptError(
-      "An error occurred while reading the releases summary",
+      "An error occurred while reading the generated JSON releases summary",
     );
   }
 

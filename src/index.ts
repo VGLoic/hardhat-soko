@@ -2,21 +2,11 @@ import "hardhat/types/config";
 import { extendConfig, scope } from "hardhat/config";
 import { HardhatConfig, HardhatUserConfig } from "hardhat/types/config";
 import { z } from "zod";
-import fs from "fs/promises";
-import {
-  completeMessage,
-  LOG_COLORS,
-  ScriptError,
-  toAsyncResult,
-} from "./utils";
+import { LOG_COLORS, ScriptError, toAsyncResult } from "./utils";
 import { retrieveReleasesSummary } from "./scripts/retrieve-releases-summary";
 import { S3BucketProvider } from "./s3-bucket-provider";
 import { pull } from "./scripts/pull";
-import {
-  generateEmptyReleasesSummaryTsContent,
-  generateEmptyReleasesSummaryJsonContent,
-  generateReleasesSummary,
-} from "./scripts/generate-releases-summary";
+import { generateReleasesSummariesAndTypings } from "./scripts/generate-typings";
 import { pushRelease } from "./scripts/push";
 import { generateDiffWithTargetRelease } from "./scripts/diff";
 
@@ -51,7 +41,7 @@ declare module "hardhat/types/config" {
 }
 
 extendConfig(
-  async (config: HardhatConfig, userConfig: Readonly<HardhatUserConfig>) => {
+  (config: HardhatConfig, userConfig: Readonly<HardhatUserConfig>) => {
     if (userConfig.soko === undefined) {
       config.soko = undefined;
       return;
@@ -80,72 +70,6 @@ extendConfig(
         )}`,
       );
       return;
-    }
-
-    const sokoDirectoryStat = await fs
-      .stat(sokoParsingResult.data.directory)
-      .catch(() => null);
-    if (sokoDirectoryStat === null) {
-      const generatedFolderInitResult = await toAsyncResult(
-        initiateGeneratedFolder(sokoParsingResult.data.directory, {
-          debug: sokoParsingResult.data.debug,
-        }),
-        { debug: sokoParsingResult.data.debug },
-      );
-      if (!generatedFolderInitResult.success) {
-        console.error(
-          completeMessage(
-            "Unable to create the Soko directory. This issue is blocking to continue with Soko.",
-            { debug: sokoParsingResult.data.debug },
-          ),
-        );
-        return;
-      }
-    } else {
-      if (!sokoDirectoryStat.isDirectory()) {
-        console.warn(
-          `A file named "${sokoParsingResult.data.directory}" exists in the root directory. Please remove it before continuing with Soko.`,
-        );
-        return;
-      }
-
-      // Check if there are the generated typings and summary files
-      const generatedTypingStats = await fs
-        .stat(`${sokoParsingResult.data.directory}/generated/typings.ts`)
-        .catch(() => null);
-      const generatedTsSummaryStats = await fs
-        .stat(`${sokoParsingResult.data.directory}/generated/summary.ts`)
-        .catch(() => null);
-      const generatedJsonSummaryStats = await fs
-        .stat(`${sokoParsingResult.data.directory}/generated/summary.json`)
-        .catch(() => null);
-
-      if (
-        !generatedTypingStats ||
-        !generatedTsSummaryStats ||
-        !generatedJsonSummaryStats
-      ) {
-        console.warn(
-          `The Soko directory exists but some of the generated files are missing. They will be regenerated using default values.`,
-        );
-        const generatedFolderInitResult = await toAsyncResult(
-          initiateGeneratedFolder(sokoParsingResult.data.directory, {
-            debug: sokoParsingResult.data.debug,
-          }),
-          {
-            debug: sokoParsingResult.data.debug,
-          },
-        );
-        if (!generatedFolderInitResult.success) {
-          console.error(
-            completeMessage(
-              "Unable to create the Soko directory. This issue is blocking to continue with Soko.",
-              { debug: sokoParsingResult.data.debug },
-            ),
-          );
-          return;
-        }
-      }
     }
 
     config.soko = sokoParsingResult.data;
@@ -287,7 +211,7 @@ sokoScope
     }
 
     if (!optsParsingResult.data.noTypingGeneration) {
-      await generateReleasesSummary(
+      await generateReleasesSummariesAndTypings(
         sokoConfig.directory,
         !optsParsingResult.data.noFilter,
         {
@@ -314,7 +238,7 @@ sokoScope
   });
 
 sokoScope
-  .task("generate-typings", "Generate typings based on the existing releases")
+  .task("typings", "Generate typings based on the existing releases")
   .addFlag("noFilter", "Do not filter similar contract in subsequent releases")
   .addFlag("debug", "Enable debug mode")
   .setAction(async (opts, hre) => {
@@ -352,7 +276,7 @@ sokoScope
 
     console.log("\n");
 
-    await generateReleasesSummary(
+    await generateReleasesSummariesAndTypings(
       sokoConfig.directory,
       !parsingResult.data.noFilter,
       {
@@ -596,65 +520,3 @@ sokoScope
       );
     }
   });
-
-async function initiateGeneratedFolder(
-  sokoDirectory: string,
-  opts: { debug: boolean },
-) {
-  // Remove the generated folder if it exists
-  await fs
-    .rm(`${sokoDirectory}/generated`, { recursive: true })
-    .catch(() => {});
-
-  // Create the generated folder
-  const creationDirResult = await toAsyncResult(
-    fs.mkdir(`${sokoDirectory}/generated`, { recursive: true }),
-    opts,
-  );
-  if (!creationDirResult.success) {
-    throw new Error(
-      "Unable to create the generated folder in the Soko directory.",
-    );
-  }
-
-  const tsSummaryResult = await toAsyncResult(
-    fs.writeFile(
-      `${sokoDirectory}/generated/summary.ts`,
-      generateEmptyReleasesSummaryTsContent(sokoDirectory),
-    ),
-    opts,
-  );
-  if (!tsSummaryResult.success) {
-    throw new Error(
-      "Unable to create the summary.ts file in the generated folder.",
-    );
-  }
-  const typingResult = await toAsyncResult(
-    fs.writeFile(
-      `${sokoDirectory}/generated/typings.ts`,
-      await fs.readFile(`${__dirname}/typings.txt`, "utf-8"),
-    ),
-    opts,
-  );
-  if (!typingResult.success) {
-    throw new Error(
-      "Unable to create the typings.ts file in the generated folder.",
-    );
-  }
-  const jsonSummaryResult = await toAsyncResult(
-    fs.writeFile(
-      `${sokoDirectory}/generated/summary.json`,
-      JSON.stringify(
-        generateEmptyReleasesSummaryJsonContent(sokoDirectory),
-        null,
-        2,
-      ),
-    ),
-    opts,
-  );
-  if (!jsonSummaryResult.success) {
-    throw new Error(
-      "Unable to create the summary.json file in the generated folder.",
-    );
-  }
-}
