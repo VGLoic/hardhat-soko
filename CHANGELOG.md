@@ -1,5 +1,11 @@
 # hardhat-soko
 
+## 0.4.0
+
+### Minor Changes
+
+- 0905684: Cleanup hardhat config extension, add typings dir
+
 ## 0.3.0
 
 ### Minor Changes
