@@ -2,6 +2,12 @@
 
 Hardhat plugin in order to manage your smart contract artifacts from a remote location.
 
+1. [Motivation](#motivation),
+2. [Installation](#installation),
+3. [Configuration](#configuration),
+4. [Hardhat Tasks](#tasks),
+5. [Using the typings](#using-the-typings).
+
 ## Motivation
 
 When compiling the smart contracts, the developer will generate _compilation artifacts_ that contain all the needed informations for further tasks such as deployment, verification or simple contract interactions.
