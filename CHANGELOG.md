@@ -1,5 +1,11 @@
 # hardhat-soko
 
+## 0.5.2
+
+### Patch Changes
+
+- 02c4a08: expose scripts entrypoints
+
 ## 0.5.1
 
 ### Patch Changes
