@@ -70,7 +70,7 @@ import {
  * - stringified abi,
  * - bytecode object,
  * - metadata
- * This hash is stored in a map with the `<file path>-<contract name>` as key.
+ * This hash is stored in a map with the `<file path><separator constant><contract name>` as key.
  *
  * Comparing the two maps, the script will output the differences between the two sets of contracts.
  */

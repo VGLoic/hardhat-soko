@@ -10,6 +10,14 @@ import { generateReleasesSummariesAndTypings } from "./scripts/generate-typings"
 import { pushRelease } from "./scripts/push";
 import { generateDiffWithTargetRelease } from "./scripts/diff";
 
+export {
+  pull,
+  pushRelease,
+  generateDiffWithTargetRelease,
+  generateReleasesSummariesAndTypings,
+  retrieveReleasesSummary,
+};
+
 type SokoHardhatUserConfig = {
   // Local directory in which releases will be pulled
   // Default to `.soko`
