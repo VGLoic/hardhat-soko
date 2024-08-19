@@ -1,5 +1,11 @@
 # hardhat-soko
 
+## 0.5.0
+
+### Minor Changes
+
+- c8a2fe2: Scripts utils are exposed
+
 ## 0.4.0
 
 ### Minor Changes
