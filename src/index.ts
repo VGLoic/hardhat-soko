@@ -18,7 +18,7 @@ export {
   retrieveReleasesSummary,
 };
 
-type SokoHardhatUserConfig = {
+export type SokoHardhatUserConfig = {
   // Local directory in which releases will be pulled
   // Default to `.soko`
   directory?: string;
