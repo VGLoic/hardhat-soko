@@ -1,5 +1,11 @@
 # hardhat-soko
 
+## 0.5.1
+
+### Patch Changes
+
+- 6136b3c: Expose config type
+
 ## 0.5.0
 
 ### Minor Changes
