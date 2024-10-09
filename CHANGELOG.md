@@ -1,5 +1,11 @@
 # hardhat-soko
 
+## 0.6.1
+
+### Patch Changes
+
+- a510e8a: Add a real default root path for s3 provider
+
 ## 0.6.0
 
 ### Minor Changes
