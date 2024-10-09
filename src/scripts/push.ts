@@ -1,50 +1,72 @@
-import { ReleaseStorageProvider } from "../s3-bucket-provider";
+import { StorageProvider } from "../s3-bucket-provider";
 import { toAsyncResult } from "../utils";
-import { LOG_COLORS, retrieveFreshBuildInfo, ScriptError } from "../utils";
+import {
+  LOG_COLORS,
+  retrieveFreshCompilationArtifact,
+  ScriptError,
+} from "../utils";
+import crypto from "crypto";
 
-export async function pushRelease(
-  release: string,
+export async function pushArtifact(
+  artifactPath: string,
+  project: string,
+  tag: string | undefined,
   opts: {
     force: boolean;
     debug: boolean;
   },
-  releaseStorageProvider: ReleaseStorageProvider,
+  storageProvider: StorageProvider,
 ) {
-  const freshBuildInfoResult = await toAsyncResult(retrieveFreshBuildInfo(), {
-    debug: opts.debug,
-  });
-  if (!freshBuildInfoResult.success) {
-    throw new ScriptError(
-      `❌ Error retrieving the build info for the compilation. Please, make sure to have a unique build info file in the "artifacts/build-info" folder.`,
-    );
-  }
-
-  const hasReleaseResult = await toAsyncResult(
-    releaseStorageProvider.hasRelease(release),
-    { debug: opts.debug },
+  const freshBuildInfoResult = await toAsyncResult(
+    retrieveFreshCompilationArtifact(artifactPath),
+    {
+      debug: opts.debug,
+    },
   );
-  if (!hasReleaseResult.success) {
+  if (!freshBuildInfoResult.success) {
+    throw new ScriptError(`❌ Error retrieving the compilation artifact`);
+  }
+
+  if (freshBuildInfoResult.value.status === "error") {
     throw new ScriptError(
-      `Error checking if the release "${release}" exists on the storage`,
+      `❌ Error retrieving the compilation artifact. ${freshBuildInfoResult.value.reason}`,
     );
   }
 
-  if (hasReleaseResult.value) {
-    if (!opts.force) {
+  if (tag) {
+    const hasTagResult = await toAsyncResult(
+      storageProvider.hasArtifactByTag(project, tag),
+      { debug: opts.debug },
+    );
+    if (!hasTagResult.success) {
       throw new ScriptError(
-        `The release "${release}" already exists on the storage. Please, make sure to use a different release name.`,
+        `Error checking if the tag "${tag}" exists on the storage`,
       );
-    } else {
-      console.log(
-        LOG_COLORS.warn,
-        `The release "${release}" already exists on the storage. Forcing the push of the release.`,
-      );
+    }
+    if (hasTagResult.value) {
+      if (!opts.force) {
+        throw new ScriptError(
+          `The tag "${tag}" already exists on the storage. Please, make sure to use a different tag name.`,
+        );
+      } else {
+        console.error(
+          LOG_COLORS.warn,
+          `The tag "${tag}" already exists on the storage. Forcing the push of the tag.`,
+        );
+      }
     }
   }
 
+  const hash = crypto.createHash("sha256");
+  hash.update(freshBuildInfoResult.value.content);
+  const checksum = hash.digest("base64");
+  const artifactId = checksum.substring(0, 12);
+
   const pushResult = await toAsyncResult(
-    releaseStorageProvider.pushRelease(
-      release,
+    storageProvider.uploadArtifact(
+      project,
+      artifactId,
+      tag,
       freshBuildInfoResult.value.content,
     ),
     { debug: opts.debug },
@@ -52,7 +74,9 @@ export async function pushRelease(
 
   if (!pushResult.success) {
     throw new ScriptError(
-      `Error pushing the release "${release}" to the storage`,
+      `Error pushing the artifact "${project}:${tag || artifactId}" to the storage`,
     );
   }
+
+  return artifactId;
 }

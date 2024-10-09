@@ -1,41 +1,41 @@
 import fs from "fs/promises";
-import { ZBuildInfo, toAsyncResult, LOG_COLORS, ScriptError } from "../utils";
-import { createHash } from "crypto";
+import { toAsyncResult, LOG_COLORS, ScriptError } from "../utils";
+import { LocalStorageProvider } from "../local-storage-provider";
 
 /**
  * Based from the Soko releases folder content, generate a `summary-exports.ts`, a `summary.json` and a `index.ts` files in the Soko typings folder.
- * This file contains two constants:
- * - `Contracts` of the form:
+ * This file contains the PROJECTS object that maps the project name to the contracts and tags.
  * ```ts
- * export const SOKO_DIRECTORY = "<the configured Soko directory>"
- * export const CONTRACTS = {
- *    "src/Counter.sol/Counter": ["latest", "v1.3.1"],
- *    "src/IncrementOracle.sol/IncrementOracle": ["latest", "v1.3.1"],
- * } as const;
- * ```
- * - `Releases` of the form:
- * ```ts
- * export const RELEASES = {
- *  latest: [
- *    "src/Counter.sol/Counter",
- *    "src/IncrementOracle.sol/IncrementOracle",
- *  ],
- *  "v1.3.1": [
- *    "src/Counter.sol/Counter",
- *    "src/IncrementOracle.sol/IncrementOracle",
- *  ],
+ * export const SOKO_PATH = "<the configured Soko path>"
+ * export const PROJECTS = {
+ *    "my-project": {
+ *      contracts: {
+ *        "src/Counter.sol/Counter": ["latest", "v1.3.1"],
+ *        "src/IncrementOracle.sol/IncrementOracle": ["latest", "v1.3.1"],
+ *      },
+ *      tags: {
+ *        latest: [
+ *          "src/Counter.sol/Counter",
+ *          "src/IncrementOracle.sol/IncrementOracle",
+ *        ],
+ *        "v1.3.1": [
+ *          "src/Counter.sol/Counter",
+ *          "src/IncrementOracle.sol/IncrementOracle",
+ *        ],
+ *      }
+ *    }
  * } as const;
  * ```
  */
-export async function generateReleasesSummariesAndTypings(
-  sokoDirectory: string,
-  sokoTypingsDirectory: string,
-  filterSimilarContracts: boolean,
+export async function generateArtifactsSummariesAndTypings(
+  sokoTypingsPath: string,
+  _filterSimilarContracts: boolean,
   opts: { debug?: boolean } = {},
+  localProvider: LocalStorageProvider,
 ) {
   // Check if the typings folder exists
   const doesTypingsFolderExist = await fs
-    .stat(sokoTypingsDirectory)
+    .stat(sokoTypingsPath)
     .catch(() => false);
   if (!doesTypingsFolderExist) {
     console.log(
@@ -43,182 +43,118 @@ export async function generateReleasesSummariesAndTypings(
       "\nThe directory containing the Soko typings has not been found, initializing it.",
     );
     const typingsDirCreationResult = await toAsyncResult(
-      fs.mkdir(sokoTypingsDirectory, { recursive: true }),
+      fs.mkdir(sokoTypingsPath, { recursive: true }),
       { debug: opts.debug },
     );
     if (!typingsDirCreationResult.success) {
       throw new ScriptError(
-        `Error creating the local Soko typings directory ${sokoDirectory}`,
+        `Error creating the local Soko typings directory ${sokoTypingsPath}`,
       );
     }
   }
-  // Check if the releases folder exists
-  const doesReleasesFolderExist = await fs
-    .stat(sokoDirectory)
-    .catch(() => false);
-  if (!doesReleasesFolderExist) {
-    console.log(
-      LOG_COLORS.warn,
-      "\nThe local Soko directory has not been found, default typings will be generated.\nRun the `pull` command if you wish to retrieve the releases and generate the accurate typings.",
-    );
-    const emptyTypingsResult = await toAsyncResult(
-      writeEmptySummaries(sokoDirectory, sokoTypingsDirectory, opts),
-      opts,
-    );
 
-    if (!emptyTypingsResult.success) {
-      throw new ScriptError("Error generating default typings");
-    }
-
-    return;
-  }
-
-  // Get the list of releases as directories in the sokoDirectory folder
-  const releasesEntriesResult = await toAsyncResult(
-    fs.readdir(sokoDirectory, { withFileTypes: true }),
-    { debug: opts.debug },
+  const projectsResult = await toAsyncResult(
+    localProvider.listProjects(),
+    opts,
   );
-  if (!releasesEntriesResult.success) {
-    throw new ScriptError("Error reading the Soko directory");
+  if (!projectsResult.success) {
+    throw new ScriptError("Error listing the projects");
   }
-  const releaseNames = releasesEntriesResult.value
-    .filter((dirent) => dirent.isDirectory())
-    .map((dirent) => dirent.name)
-    .filter((name) => name !== "generated");
-
-  const releasesPerContracts: Record<
-    string,
-    { release: string; contractDigest: string }[]
-  > = {};
-
-  if (releaseNames.length === 0) {
-    console.log(
+  const projects = projectsResult.value;
+  if (projects.length === 0) {
+    console.error(
       LOG_COLORS.warn,
-      "\nNo local releases have been found. Generating an empty summary.",
+      "\nNo projects have been found. Generating an empty summary.",
     );
 
     const emptySummariesResult = await toAsyncResult(
-      writeEmptySummaries(sokoDirectory, sokoTypingsDirectory, opts),
+      writeEmptySummaries(localProvider.rootPath, sokoTypingsPath, opts),
       opts,
     );
+
     if (!emptySummariesResult.success) {
       throw new ScriptError(
-        "Error creating default typings when no releases have been found",
+        "Error creating default typings when no projects have been found",
       );
     }
 
     return;
   }
 
-  for await (const release of releaseArtifacts(
-    sokoDirectory,
-    releaseNames,
-    opts,
-  )) {
-    for (const contractPath in release.buildInfo.output.contracts) {
-      const contracts = release.buildInfo.output.contracts[contractPath];
-      for (const contractName in contracts) {
-        const contractHash = createHash("sha256");
-        contractHash.update(
-          JSON.stringify(
-            release.buildInfo.output.contracts[contractPath][contractName].abi,
-          ),
-        );
-        contractHash.update(
-          JSON.stringify(
-            release.buildInfo.output.contracts[contractPath][contractName].evm,
-          ),
-        );
-        const contractDigest = contractHash.digest("hex");
-        const contractKey = `${contractPath}:${contractName}`;
-        if (!releasesPerContracts[contractKey]) {
-          releasesPerContracts[contractKey] = [];
-        }
-        releasesPerContracts[contractKey].push({
-          release: release.name,
-          contractDigest,
-        });
-      }
+  // project -> contract -> tag
+  const summary: Record<
+    string,
+    {
+      tagsPerContract: Record<string, string[]>;
+      contractsPerTag: Record<string, string[]>;
     }
-  }
+  > = {};
 
-  // Sort and optionally filter similar contracts
-  const updatedReleasesPerContracts: Record<string, string[]> = {};
-  for (const contractKey in releasesPerContracts) {
-    // Order releases consistently
-    releasesPerContracts[contractKey].sort((a, b) =>
-      a.release.localeCompare(b.release),
+  for (const project of projects) {
+    const tagsResult = await toAsyncResult(
+      localProvider.listTags(project),
+      opts,
     );
-    const updatedReleases = [];
-    if (filterSimilarContracts) {
-      // Filter out similar contract
-      let lastSemanticVersionContractHash = undefined;
-      for (const contractRelease of releasesPerContracts[contractKey]) {
-        if (!isSemanticVersion(contractRelease.release)) {
-          updatedReleases.push(contractRelease.release);
-        } else {
-          if (
-            lastSemanticVersionContractHash &&
-            lastSemanticVersionContractHash === contractRelease.contractDigest
-          ) {
-            continue;
-          }
-          updatedReleases.push(contractRelease.release);
-          lastSemanticVersionContractHash = contractRelease.contractDigest;
-        }
-      }
-    } else {
-      updatedReleases.push(
-        ...releasesPerContracts[contractKey].map(
-          (contractRelease) => contractRelease.release,
-        ),
-      );
+    if (!tagsResult.success) {
+      throw new ScriptError(`Error listing the tags for project "${project}"`);
     }
-    updatedReleasesPerContracts[contractKey] = updatedReleases;
-  }
-
-  const contractsPerReleases = releaseNames.reduce(
-    (acc, release) => {
-      acc[release] = [];
-      return acc;
-    },
-    {} as Record<string, string[]>,
-  );
-  for (const contractKey in updatedReleasesPerContracts) {
-    const contractReleases = updatedReleasesPerContracts[contractKey];
-    for (const release of contractReleases) {
-      if (!contractsPerReleases[release]) {
+    const tagsPerContract: Record<string, string[]> = {};
+    const contractsPerTag: Record<string, string[]> = {};
+    for (const { tag } of tagsResult.value) {
+      if (!contractsPerTag[tag]) {
+        contractsPerTag[tag] = [];
+      }
+      const artifactResult = await toAsyncResult(
+        localProvider.retrieveArtifactByTag(project, tag),
+        { debug: opts.debug },
+      );
+      if (!artifactResult.success) {
         throw new ScriptError(
-          `Release "${release}" not found in contractsPerReleases`,
+          `Error retrieving the artifact for project "${project}" and tag "${tag}"`,
         );
       }
-      contractsPerReleases[release].push(contractKey);
+      for (const contractPath in artifactResult.value.output.contracts) {
+        const contracts = artifactResult.value.output.contracts[contractPath];
+        for (const contractName in contracts) {
+          const contractKey = `${contractPath}:${contractName}`;
+          contractsPerTag[tag].push(contractKey);
+          if (!tagsPerContract[contractKey]) {
+            tagsPerContract[contractKey] = [];
+          }
+          tagsPerContract[contractKey].push(tag);
+        }
+      }
     }
+    summary[project] = { tagsPerContract, contractsPerTag };
   }
 
   // Generate the `generate/summary-exports.ts` content
-  let releasesSummary = `// THIS IS AN AUTOGENERATED FILE. EDIT AT YOUR OWN RISKS.\n\n`;
-  releasesSummary += `export const SOKO_DIRECTORY="${sokoDirectory}";\n\n`;
-  releasesSummary += `export const CONTRACTS = {\n`;
-  for (const contractKey in updatedReleasesPerContracts) {
-    // 3. output
-    releasesSummary += `  "${contractKey}": ${JSON.stringify(
-      updatedReleasesPerContracts[contractKey],
-    )},\n`;
+  let generatedSummary = `// THIS IS AN AUTOGENERATED FILE. EDIT AT YOUR OWN RISKS.\n\n`;
+  generatedSummary += `export const SOKO_PATH="${localProvider.rootPath}";\n\n`;
+  generatedSummary += `export const PROJECTS = {\n`;
+  for (const project in summary) {
+    generatedSummary += `  "${project}": {\n`;
+    generatedSummary += `    contracts: {\n`;
+    for (const contract in summary[project].tagsPerContract) {
+      generatedSummary += `      "${contract}": ${JSON.stringify(
+        summary[project].tagsPerContract[contract],
+      )},\n`;
+    }
+    generatedSummary += `    },\n`;
+    generatedSummary += `    tags: {\n`;
+    for (const tag in summary[project].contractsPerTag) {
+      generatedSummary += `      "${tag}": ${JSON.stringify(
+        summary[project].contractsPerTag[tag],
+      )},\n`;
+    }
+    generatedSummary += `    },\n`;
+    generatedSummary += `  },\n`;
   }
-  releasesSummary += `} as const;\n\n`;
-
-  releasesSummary += `export const RELEASES = {\n`;
-  for (const release in contractsPerReleases) {
-    releasesSummary += `  "${release}": ${JSON.stringify(
-      contractsPerReleases[release],
-    )},\n`;
-  }
-  releasesSummary += `} as const;\n`;
+  generatedSummary += `} as const;\n`;
 
   // Write the `summary-exports.ts` file
   const writeTsResult = await toAsyncResult(
-    fs.writeFile(`${sokoTypingsDirectory}/summary-exports.ts`, releasesSummary),
+    fs.writeFile(`${sokoTypingsPath}/summary-exports.ts`, generatedSummary),
     { debug: opts.debug },
   );
   if (!writeTsResult.success) {
@@ -229,12 +165,11 @@ export async function generateReleasesSummariesAndTypings(
   // Write the `summary.json` file
   const writeJsonResult = await toAsyncResult(
     fs.writeFile(
-      `${sokoTypingsDirectory}/summary.json`,
+      `${sokoTypingsPath}/summary.json`,
       JSON.stringify(
         {
-          sokoDirectory: sokoDirectory,
-          contracts: updatedReleasesPerContracts,
-          releases: contractsPerReleases,
+          sokoPath: localProvider.rootPath,
+          projects: summary,
         },
         null,
         4,
@@ -249,7 +184,7 @@ export async function generateReleasesSummariesAndTypings(
   }
   const writeTypingsResult = await toAsyncResult(
     fs.writeFile(
-      `${sokoTypingsDirectory}/index.ts`,
+      `${sokoTypingsPath}/index.ts`,
       await fs.readFile(`${__dirname}/typings.txt`, "utf-8"),
     ),
     { debug: opts.debug },
@@ -261,98 +196,28 @@ export async function generateReleasesSummariesAndTypings(
   }
 }
 
-async function* releaseArtifacts(
-  sokoDirectory: string,
-  releases: string[],
-  opts: { debug?: boolean } = {},
-) {
-  for (const release of releases) {
-    const releaseBuildInfo = await getReleaseBuildInfo(
-      sokoDirectory,
-      release,
-      opts,
-    );
-    yield { buildInfo: releaseBuildInfo, name: release };
-  }
-}
-
-async function getReleaseBuildInfo(
-  sokoDirectory: string,
-  release: string,
-  opts: { debug?: boolean },
-) {
-  const buildInfoExists = await fs
-    .stat(`${sokoDirectory}/${release}/build-info.json`)
-    .catch(() => false);
-  if (!buildInfoExists) {
-    throw new ScriptError(
-      `"build-info.json" not found for release "${release}". Skipping`,
-    );
-  }
-  const buildInfoContentResult = await toAsyncResult(
-    fs
-      .readFile(`${sokoDirectory}/${release}/build-info.json`, "utf-8")
-      .then(JSON.parse),
-    { debug: opts.debug },
-  );
-  if (!buildInfoContentResult.success) {
-    console.error(buildInfoContentResult.error);
-    throw buildInfoContentResult.error;
-  }
-  const buildInfoResult = ZBuildInfo.passthrough().safeParse(
-    buildInfoContentResult.value,
-  );
-  if (!buildInfoResult.success) {
-    console.error(buildInfoResult.error);
-    throw buildInfoResult.error;
-  }
-  return buildInfoResult.data;
-}
-
-function isSemanticVersion(s: string) {
-  let consideredString = s;
-  if (s.startsWith("v")) {
-    consideredString = s.substring(1);
-  }
-  const parts = consideredString.split(".");
-  if (parts.length === 0) return false;
-  if (parts.length > 3) return false;
-  if (
-    parts.some((part) => {
-      const partAsNumber = Number(part);
-      if (isNaN(partAsNumber)) return true;
-      if (Math.floor(partAsNumber) !== partAsNumber) return true;
-    })
-  )
-    return false;
-  return true;
-}
-
 function generateEmptyReleasesSummaryTsContent(sokoDirectory: string) {
   return `// THIS IS AN AUTOGENERATED FILE. EDIT AT YOUR OWN RISKS.
-  export const SOKO_DIRECTORY="${sokoDirectory}";
+  export const SOKO_PATH="${sokoDirectory}";
   
-  export const CONTRACTS = {} as const;
-  
-  export const RELEASES = {} as const;
+  export const PROJECTS = {} as const;
   `;
 }
-function generateEmptyReleasesSummaryJsonContent(sokoDirectory: string) {
+function generateEmptyReleasesSummaryJsonContent(sokoPath: string) {
   return {
-    sokoDirectory,
-    contracts: {},
-    releases: {},
+    sokoPath,
+    projects: {},
   };
 }
 
 async function writeEmptySummaries(
   sokoDirectory: string,
-  sokoTypingsDirectory: string,
+  sokoTypingsPath: string,
   opts: { debug?: boolean } = {},
 ) {
   const writeEmptyTsSummaryResult = await toAsyncResult(
     fs.writeFile(
-      `${sokoTypingsDirectory}/summary-exports.ts`,
+      `${sokoTypingsPath}/summary-exports.ts`,
       generateEmptyReleasesSummaryTsContent(sokoDirectory),
     ),
     { debug: opts.debug },
@@ -364,7 +229,7 @@ async function writeEmptySummaries(
   }
   const writeEmptyJsonResult = await toAsyncResult(
     fs.writeFile(
-      `${sokoTypingsDirectory}/summary.json`,
+      `${sokoTypingsPath}/summary.json`,
       JSON.stringify(
         generateEmptyReleasesSummaryJsonContent(sokoDirectory),
         null,
@@ -380,7 +245,7 @@ async function writeEmptySummaries(
   }
   const writeTypingsResult = await toAsyncResult(
     fs.writeFile(
-      `${sokoTypingsDirectory}/index.ts`,
+      `${sokoTypingsPath}/index.ts`,
       await fs.readFile(`${__dirname}/typings.txt`, "utf-8"),
     ),
     { debug: opts.debug },
