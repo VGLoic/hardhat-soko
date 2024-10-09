@@ -110,9 +110,10 @@ const ZArtifactName = z
   });
 
 sokoScope
-  .task("pull", "Pull one or many artifacts of a project")
-  .setDescription(
-    `Pull one or many artifacts of a project.
+  .task("pull", "Pull one or many artifacts of a project.")
+  .addFlag(
+    "aa",
+    `Fake flag - Task description: Pull one or many artifacts of a project.
 
 One artifact can be pulled by tag
   npx hardhat soko pull my-project:v1.2.3
@@ -123,6 +124,8 @@ All artifacts for a project can be downloaded
   npx hardhat soko pull my-project
 
 Already downloaded artifacts are not downloaded again by default, enable the force flag to force the download.
+
+
 `,
   )
   .addParam(
@@ -285,9 +288,10 @@ Already downloaded artifacts are not downloaded again by default, enable the for
   });
 
 sokoScope
-  .task("push", "Push a compilation artifact")
-  .setDescription(
-    `Push a compilation artifact.
+  .task("push", "Push a compilation artifact.")
+  .addFlag(
+    "aa",
+    `Fake flag - Task description: Push a compilation artifact.
 
 The artifact will be stored in the input project (through the "-t" flag). An identifier is derived for the artifact.
   npx hardhat soko push ./path/to-my-artifact/artifact.json -t my-project
@@ -295,7 +299,9 @@ The artifact will be stored in the input project (through the "-t" flag). An ide
 If a tag is provided, the artifact will also be identified by it:
   npx hardhat soko push ./path/to-my-artifact/artifact.json -t my-project:v1.2.3
 
-If the provided tag already exists in the storage, the push will be aborted unless the force flag is enabled.`,
+If the provided tag already exists in the storage, the push will be aborted unless the force flag is enabled.
+
+`,
   )
   .addParam("artifactPath", "The compilation artifact path to push")
   .addParam(
@@ -398,7 +404,14 @@ If the provided tag already exists in the storage, the push will be aborted unle
   });
 
 sokoScope
-  .task("typings", "Generate typings based on the existing artifacts")
+  .task("typings", "Generate typings based on the existing artifacts.")
+  .addFlag(
+    "aa",
+    `Fake flag - Task description: Generate typings based on the existing artifacts.
+The typings will be generated in the configured typings path.
+
+`,
+  )
   .addFlag("debug", "Enable debug mode")
   .setAction(async (opts, hre) => {
     const sokoConfig = hre.config.soko;
@@ -469,8 +482,8 @@ sokoScope
   });
 
 sokoScope
-  .task("list", "List all the artifacts")
-  .setDescription(
+  .task(
+    "list",
     "List the artifacts that have been pulled with their associated projects.",
   )
   .addFlag("debug", "Enable debug mode")
@@ -560,7 +573,7 @@ sokoScope
 sokoScope
   .task(
     "diff",
-    "Compare a local compilation artifacts with an existing release",
+    "Compare a local compilation artifacts with an existing release.",
   )
   .addParam("artifactPath", "The compilation artifact path to compare")
   .addParam(
