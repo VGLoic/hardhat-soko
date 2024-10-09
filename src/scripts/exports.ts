@@ -1,13 +1,13 @@
 import { pull } from "./pull";
-import { pushRelease } from "./push";
+import { pushArtifact } from "./push";
 import { generateDiffWithTargetRelease } from "./diff";
-import { generateReleasesSummariesAndTypings } from "./generate-typings";
-import { retrieveReleasesSummary } from "./retrieve-releases-summary";
+import { generateArtifactsSummariesAndTypings } from "./generate-typings";
+import { retrieveGeneratedSummary } from "./retrieve-generated-summary";
 
 export {
   pull,
-  pushRelease,
+  pushArtifact,
   generateDiffWithTargetRelease,
-  generateReleasesSummariesAndTypings,
-  retrieveReleasesSummary,
+  generateArtifactsSummariesAndTypings,
+  retrieveGeneratedSummary,
 };

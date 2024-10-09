@@ -1,203 +1,185 @@
-import fs from "fs/promises";
 import { toAsyncResult } from "../utils";
 import { LOG_COLORS, ScriptError } from "../utils";
-import { ReleaseStorageProvider } from "../s3-bucket-provider";
+import { StorageProvider } from "../s3-bucket-provider";
+import { LocalStorageProvider } from "../local-storage-provider";
 
 /**
- * Pulls releases from an S3 bucket
- * @param sokoDirectory The Soko directory
+ * Pulls artifacts of a project from the storage provider
+ * @param project The project name
+ * @param tagOrId The tag or ID of the artifact to pull
  * @param opts.force Whether to force the pull
  * @param opts.release A specific release to pull
  * @param opts.debug Whether to enable debug mode
- * @param releaseStorageProvider The release storage provider
+ * @param storageProvider The storage provider
  * @returns An object with the remote releases, pulled releases, and failed releases
  */
 export async function pull(
-  sokoDirectory: string,
-  opts: { force: boolean; release?: string; debug: boolean },
-  releaseStorageProvider: ReleaseStorageProvider,
+  project: string,
+  tagOrId: string | undefined,
+  opts: { force: boolean; debug: boolean },
+  localProvider: LocalStorageProvider,
+  storageProvider: StorageProvider,
 ) {
-  const remoteReleasesResult = await toAsyncResult(
-    releaseStorageProvider.listReleases(),
+  const remoteListingResult = await toAsyncResult(
+    Promise.all([
+      storageProvider.listTags(project),
+      storageProvider.listIds(project),
+    ]),
     { debug: opts.debug },
   );
-  if (!remoteReleasesResult.success) {
-    throw new ScriptError("Error listing the releases in the storage");
+  if (!remoteListingResult.success) {
+    throw new ScriptError("Error listing the remote tags and IDs");
   }
-  const remoteReleases = remoteReleasesResult.value;
+  const [remoteTags, remoteIds] = remoteListingResult.value;
 
-  if (remoteReleases.length === 0) {
+  const tagsToDownload: string[] = [];
+  const idsToDownload: string[] = [];
+
+  if (tagOrId) {
+    if (remoteTags.includes(tagOrId)) {
+      tagsToDownload.push(tagOrId);
+    } else if (remoteIds.includes(tagOrId)) {
+      idsToDownload.push(tagOrId);
+    } else {
+      throw new ScriptError(
+        `The tag or ID "${tagOrId}" does not exist in the storage`,
+      );
+    }
+  } else {
+    tagsToDownload.push(...remoteTags);
+    idsToDownload.push(...remoteIds);
+  }
+
+  let filteredTagsToDownload: string[] = [];
+  let filteredIdsToDownload: string[] = [];
+  if (opts.force) {
+    filteredTagsToDownload = tagsToDownload;
+    filteredIdsToDownload = idsToDownload;
+  } else {
+    const localListingResult = await toAsyncResult(
+      Promise.all([
+        localProvider.listTags(project).then((tagMetadatas) => {
+          const tags = new Set<string>();
+          for (const tagMetadata of tagMetadatas) {
+            tags.add(tagMetadata.tag);
+          }
+          return tags;
+        }),
+        localProvider.listIds(project).then((idMetadatas) => {
+          const ids = new Set<string>();
+          for (const idMetadata of idMetadatas) {
+            ids.add(idMetadata.id);
+          }
+          return ids;
+        }),
+      ]),
+      { debug: opts.debug },
+    );
+    if (!localListingResult.success) {
+      throw new ScriptError("Error listing the local tags and IDs");
+    }
+
+    const [localTags, localIds] = localListingResult.value;
+
+    filteredTagsToDownload = tagsToDownload.filter(
+      (tag) => !localTags.has(tag),
+    );
+    filteredIdsToDownload = idsToDownload.filter((id) => !localIds.has(id));
+  }
+
+  if (
+    filteredTagsToDownload.length === 0 &&
+    filteredIdsToDownload.length === 0
+  ) {
     return {
-      remoteReleases: [],
-      pulledReleases: [],
-      failedReleases: [],
+      remoteTags,
+      remoteIds,
+      pulledTags: [],
+      pulledIds: [],
+      failedTags: [],
+      failedIds: [],
     };
   }
 
-  if (opts.release && !remoteReleases.includes(opts.release)) {
-    throw new ScriptError(
-      `The release "${opts.release}" does not exist in the S3 bucket`,
-    );
-  }
-
-  let localReleases: string[] = [];
-  const doesReleasesFolderExist = await fs
-    .stat(sokoDirectory)
-    .catch(() => false);
-  if (doesReleasesFolderExist) {
-    // Get the list of releases as directories in the sokoDirectory folder
-    const releasesEntriesResult = await toAsyncResult(
-      fs.readdir(sokoDirectory, { withFileTypes: true }),
-      { debug: opts.debug },
-    );
-
-    if (!releasesEntriesResult.success) {
-      throw new ScriptError("Error reading the contents of the Soko directory");
-    }
-
-    localReleases = releasesEntriesResult.value
-      .filter((dirent) => dirent.isDirectory())
-      .map((dirent) => dirent.name)
-      .filter((name) => name !== "generated");
-  }
-
-  const localReleasesSet = new Set(localReleases);
-
-  let releasesToPull: string[];
-  if (!opts.force) {
-    if (opts.release) {
-      if (localReleasesSet.has(opts.release)) {
-        return {
-          remoteReleases,
-          pulledReleases: [],
-          failedReleases: [],
-        };
-      }
-      releasesToPull = [opts.release];
-    } else {
-      const missingReleases = remoteReleases.filter(
-        (release) => !localReleasesSet.has(release),
-      );
-
-      if (missingReleases.length === 0) {
-        return {
-          remoteReleases,
-          pulledReleases: [],
-          failedReleases: [],
-        };
-      }
-
-      if (missingReleases.length > 0) {
-        console.log(
-          LOG_COLORS.log,
-          `\nFound ${missingReleases.length} missing releases, starting to pull`,
-        );
-      }
-
-      releasesToPull = missingReleases;
-    }
-  } else {
-    if (opts.release) {
-      console.log(
-        LOG_COLORS.log,
-        `\nForce flag enabled, starting to pull release "${opts.release}"`,
-      );
-      releasesToPull = [opts.release];
-    } else {
-      console.log(
-        LOG_COLORS.log,
-        "\nForce flag enabled, starting to pull all releases",
-      );
-      releasesToPull = remoteReleases;
-    }
-  }
-
-  const pullResults = await Promise.allSettled(
-    releasesToPull.map(async (releaseToPull) =>
-      pullRelease(
-        sokoDirectory,
-        releaseToPull,
-        releaseStorageProvider,
-        opts.debug,
-      )
-        .then(() => {
-          console.log(
-            LOG_COLORS.success,
-            `\nSuccessfully pulled release "${releaseToPull}"`,
-          );
-        })
-        .catch((err) => {
-          if (opts.debug) {
-            console.error(
-              LOG_COLORS.error,
-              `\nError pulling release "${releaseToPull}": ${err.message}`,
-            );
-          } else {
-            console.error(
-              LOG_COLORS.error,
-              `\nError pulling release "${releaseToPull}"`,
-            );
-          }
-          throw err;
-        }),
-    ),
+  const missingArtifactCount =
+    filteredTagsToDownload.length + filteredIdsToDownload.length;
+  console.error(
+    LOG_COLORS.log,
+    `\nFound ${missingArtifactCount} missing artifacts, starting to pull`,
   );
 
-  const pulledReleases = [];
-  const failedReleases = [];
-  for (let i = 0; i < pullResults.length; i++) {
-    const releaseToPull = releasesToPull[i];
-    if (pullResults[i].status === "fulfilled") {
-      pulledReleases.push(releaseToPull);
+  const tagsPromises: Promise<void>[] = filteredTagsToDownload.map(
+    async (tag) => {
+      const downloadResult = await toAsyncResult(
+        storageProvider.downloadArtifactByTag(project, tag),
+        { debug: opts.debug },
+      );
+      if (!downloadResult.success) {
+        throw new ScriptError(`Error downloading the tag "${tag}"`);
+      }
+
+      const createResult = await toAsyncResult(
+        localProvider.createArtifactByTag(project, tag, downloadResult.value),
+        { debug: opts.debug },
+      );
+      if (!createResult.success) {
+        throw new ScriptError(`Error creating the tag "${tag}"`);
+      }
+
+      console.error(
+        LOG_COLORS.success,
+        `\nSuccessfully pulled artifact "${tag}"`,
+      );
+    },
+  );
+  const idsPromises: Promise<void>[] = filteredIdsToDownload.map(async (id) => {
+    const downloadResult = await toAsyncResult(
+      storageProvider.downloadArtifactById(project, id),
+      { debug: opts.debug },
+    );
+    if (!downloadResult.success) {
+      throw new ScriptError(`Error downloading the ID "${id}"`);
+    }
+
+    const createResult = await toAsyncResult(
+      localProvider.createArtifactById(project, id, downloadResult.value),
+      { debug: opts.debug },
+    );
+    if (!createResult.success) {
+      throw new ScriptError(`Error creating the ID "${id}"`);
+    }
+
+    console.error(LOG_COLORS.success, `\nSuccessfully pulled artifact "${id}"`);
+  });
+
+  const tagsSettlements = await Promise.allSettled(tagsPromises);
+  const pulledTags = [];
+  const failedTags = [];
+  for (let i = 0; i < tagsSettlements.length; i++) {
+    if (tagsSettlements[i].status === "fulfilled") {
+      pulledTags.push(filteredTagsToDownload[i]);
     } else {
-      failedReleases.push(releaseToPull);
+      failedTags.push(filteredTagsToDownload[i]);
+    }
+  }
+
+  const idsSettlements = await Promise.allSettled(idsPromises);
+  const pulledIds = [];
+  const failedIds = [];
+  for (let i = 0; i < idsSettlements.length; i++) {
+    if (idsSettlements[i].status === "fulfilled") {
+      pulledIds.push(filteredIdsToDownload[i]);
+    } else {
+      failedIds.push(filteredIdsToDownload[i]);
     }
   }
 
   return {
-    remoteReleases,
-    pulledReleases,
-    failedReleases,
+    remoteTags,
+    remoteIds,
+    pulledTags,
+    pulledIds,
+    failedTags,
+    failedIds,
   };
-}
-
-async function pullRelease(
-  sokoDirectory: string,
-  releaseToPull: string,
-  releaseStorageProvider: ReleaseStorageProvider,
-  debug: boolean,
-) {
-  const releaseContentResult = await toAsyncResult(
-    releaseStorageProvider.pullRelease(releaseToPull),
-    { debug },
-  );
-  if (!releaseContentResult.success) {
-    throw new ScriptError(
-      `Error pulling the release "${releaseToPull}" from the storage`,
-    );
-  }
-
-  const releaseDirectoryCreationResult = await toAsyncResult(
-    fs.mkdir(`${sokoDirectory}/${releaseToPull}`, { recursive: true }),
-    { debug },
-  );
-  if (!releaseDirectoryCreationResult.success) {
-    throw new ScriptError(
-      `Error creating the release directory for "${releaseToPull}"`,
-    );
-  }
-
-  const copyResult = await toAsyncResult(
-    fs.writeFile(
-      `${sokoDirectory}/${releaseToPull}/build-info.json`,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      releaseContentResult.value as any,
-    ),
-    { debug },
-  );
-  if (!copyResult.success) {
-    throw new ScriptError(
-      `Error copying the "build-info.json" for release "${releaseToPull}"`,
-    );
-  }
 }
