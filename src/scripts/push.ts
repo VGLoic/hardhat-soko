@@ -59,7 +59,7 @@ export async function pushArtifact(
 
   const hash = crypto.createHash("sha256");
   hash.update(freshBuildInfoResult.value.content);
-  const checksum = hash.digest("base64");
+  const checksum = hash.digest("hex");
   const artifactId = checksum.substring(0, 12);
 
   const pushResult = await toAsyncResult(
