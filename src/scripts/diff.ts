@@ -1,8 +1,7 @@
-import { z } from "zod";
 import { createHash } from "node:crypto";
 import {
   ZBuildInfo,
-  type ZContractInfo,
+  type ContractInfo,
   toAsyncResult,
   retrieveFreshCompilationArtifact,
   ScriptError,
@@ -227,7 +226,7 @@ async function generateContractHashes(
   return contractHashes;
 }
 
-function hashContract(contract: z.infer<typeof ZContractInfo>): string {
+function hashContract(contract: ContractInfo): string {
   const hash = createHash("sha256");
 
   contract.abi.sort((a, b) => a.name.localeCompare(b.name));
