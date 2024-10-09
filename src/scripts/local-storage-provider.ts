@@ -152,7 +152,7 @@ export class LocalStorageProvider {
     );
     const hash = crypto.createHash("sha256");
     hash.update(artifactContent);
-    return hash.digest("base64").substring(0, 12);
+    return hash.digest("hex").substring(0, 12);
   }
 
   private exists(path: string): Promise<boolean> {
