@@ -1,5 +1,11 @@
 # hardhat-soko
 
+## 0.6.2
+
+### Patch Changes
+
+- c258f7a: Expose localStorageProvider
+
 ## 0.6.1
 
 ### Patch Changes
