@@ -1,3 +1,4 @@
+import { Dirent } from "fs";
 import fs from "fs/promises";
 import { z } from "zod";
 
@@ -114,43 +115,103 @@ export const ZBuildInfo = z.object({
   }),
 });
 
-export async function retrieveFreshBuildInfo() {
-  const BUILD_INFO_PATH = "artifacts/build-info";
-  const hasBuildInfoFolder = await fs.stat(BUILD_INFO_PATH).catch(() => false);
-  if (!hasBuildInfoFolder) {
-    throw new Error(`Build info folder not found at ${BUILD_INFO_PATH}`);
+export async function retrieveFreshCompilationArtifact(
+  inputPath: string,
+): Promise<
+  | {
+      status: "success";
+      path: string;
+      content: string;
+    }
+  | {
+      status: "error";
+      reason: string;
+    }
+> {
+  const stat = await fs.stat(inputPath).catch(() => undefined);
+  if (!stat) {
+    return {
+      status: "error",
+      reason: `Input path "${inputPath}" not found`,
+    };
   }
 
-  const buildInfoFolderResult = await toAsyncResult(
-    fs.readdir(BUILD_INFO_PATH),
-  );
-  if (!buildInfoFolderResult.success) {
-    throw new Error(
-      `Error reading build info folder: ${buildInfoFolderResult.error}`,
+  let compilationArtifactPath: string | undefined = undefined;
+
+  if (stat.isFile()) {
+    if (!inputPath.endsWith(".json")) {
+      return {
+        status: "error",
+        reason: `The file at path "${inputPath}" is not a json file. Compilation artifact must be a json file.`,
+      };
+    }
+    compilationArtifactPath = inputPath;
+  } else if (stat.isDirectory()) {
+    const entries = await fs.readdir(inputPath, { withFileTypes: true });
+
+    let finalCompilationArtifactsDirectoryEntries: Dirent[] | undefined =
+      undefined;
+    let finalBasePath: string = inputPath;
+
+    // If we found only json files, we assume that we are in the final folder, we then expect only one file
+    if (
+      entries.every((entry) => entry.isFile() && entry.name.endsWith(".json"))
+    ) {
+      console.error(
+        LOG_COLORS.log,
+        `Found potential compilation artifacts in path "${inputPath}"`,
+      );
+      finalCompilationArtifactsDirectoryEntries = entries;
+    }
+
+    // If we found a build-info folder, we can dig into it
+    const buildInfoFolderEntry = entries.find(
+      (entry) => entry.isDirectory() && entry.name === "build-info",
     );
+    if (buildInfoFolderEntry) {
+      finalBasePath = `${inputPath}/${buildInfoFolderEntry.name}`;
+      finalCompilationArtifactsDirectoryEntries = await fs.readdir(
+        `${inputPath}/${buildInfoFolderEntry.name}`,
+        { withFileTypes: true },
+      );
+    }
+
+    if (!finalCompilationArtifactsDirectoryEntries) {
+      return {
+        status: "error",
+        reason: `Failed to find compilation artifacts in path "${inputPath}". Please provide a more precise path.`,
+      };
+    }
+
+    const checkResult = checkCompilationArtifactsFolder(
+      finalCompilationArtifactsDirectoryEntries,
+    );
+    if (checkResult.status === "error") {
+      return checkResult;
+    }
+
+    compilationArtifactPath = `${finalBasePath}/${checkResult.name}`;
+    console.error(
+      LOG_COLORS.log,
+      `Found a potential compilation artifact in path "${compilationArtifactPath}"`,
+    );
+  } else {
+    return {
+      status: "error",
+      reason: `Thing at path "${inputPath}" is neither identified as a file nor as a directory. This thing is not yet supported`,
+    };
   }
 
-  if (buildInfoFolderResult.value.length > 1) {
-    throw new Error(
-      `Expected exactly one build info file, found ${buildInfoFolderResult.value.length}`,
-    );
-  }
-  const buildInfoFileName = buildInfoFolderResult.value.at(0);
-  if (!buildInfoFileName) {
-    throw new Error(`No build info file found`);
-  }
-  if (!buildInfoFileName.endsWith(".json")) {
-    throw new Error(`Build info file is not a json file: ${buildInfoFileName}`);
+  if (!compilationArtifactPath) {
+    throw new Error("No compilation artifact found");
   }
 
   const contentResult = await toAsyncResult(
-    fs
-      .readFile(`${BUILD_INFO_PATH}/${buildInfoFileName}`, "utf-8")
-      .then((data) => {
-        const firstParsing = JSON.parse(data);
-        ZBuildInfo.parse(firstParsing);
-        return data;
-      }),
+    fs.readFile(compilationArtifactPath, "utf-8").then((data) => {
+      const firstParsing = JSON.parse(data);
+      ZBuildInfo.parse(firstParsing);
+      return data;
+    }),
   );
 
   if (!contentResult.success) {
@@ -158,7 +219,27 @@ export async function retrieveFreshBuildInfo() {
   }
 
   return {
-    path: `${BUILD_INFO_PATH}/${buildInfoFileName}`,
+    status: "success",
+    path: compilationArtifactPath,
     content: contentResult.value,
   };
+}
+
+function checkCompilationArtifactsFolder(entries: Dirent[]):
+  | {
+      status: "success";
+      name: string;
+    }
+  | { status: "error"; reason: string } {
+  if (entries.length > 1) {
+    return {
+      status: "error",
+      reason: `Found multiple potential compilation artifacts in the Hardhat build info folders. Please provide a more precise path.`,
+    };
+  } else {
+    return {
+      status: "success",
+      name: entries[0].name,
+    };
+  }
 }

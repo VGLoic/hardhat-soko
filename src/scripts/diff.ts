@@ -4,7 +4,7 @@ import {
   ZBuildInfo,
   type ZContractInfo,
   toAsyncResult,
-  retrieveFreshBuildInfo,
+  retrieveFreshCompilationArtifact,
   ScriptError,
 } from "../utils";
 import { LocalStorageProvider } from "../local-storage-provider";
@@ -79,7 +79,7 @@ type Difference = {
   status: "added" | "removed" | "changed";
 };
 export async function generateDiffWithTargetRelease(
-  _artifactPath: string,
+  artifactPath: string,
   artifact: { project: string; tagOrId: string },
   opts: { debug?: boolean } = {},
   localProvider: LocalStorageProvider,
@@ -117,10 +117,23 @@ export async function generateDiffWithTargetRelease(
     );
   }
 
-  const freshBuildInfoResult = await toAsyncResult(retrieveFreshBuildInfo());
+  const freshBuildInfoResult = await toAsyncResult(
+    retrieveFreshCompilationArtifact(artifactPath),
+  );
   if (!freshBuildInfoResult.success) {
+    if (opts.debug) {
+      console.error(
+        `Error retrieving the build info for the compilation: ${freshBuildInfoResult.error}`,
+      );
+    }
     throw new ScriptError(
-      `Error retrieving the build info for the compilation. Please, make sure to have a unique build info file in the "artifacts/build-info" folder.`,
+      `Error retrieving the build info for the compilation.`,
+    );
+  }
+
+  if (freshBuildInfoResult.value.status === "error") {
+    throw new ScriptError(
+      `Error retrieving the build info for the compilation: ${freshBuildInfoResult.value.reason}`,
     );
   }
 

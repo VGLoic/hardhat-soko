@@ -1,10 +1,14 @@
 import { StorageProvider } from "../s3-bucket-provider";
 import { toAsyncResult } from "../utils";
-import { LOG_COLORS, retrieveFreshBuildInfo, ScriptError } from "../utils";
+import {
+  LOG_COLORS,
+  retrieveFreshCompilationArtifact,
+  ScriptError,
+} from "../utils";
 import crypto from "crypto";
 
 export async function pushArtifact(
-  _artifactPath: string,
+  artifactPath: string,
   project: string,
   tag: string | undefined,
   opts: {
@@ -13,12 +17,19 @@ export async function pushArtifact(
   },
   storageProvider: StorageProvider,
 ) {
-  const freshBuildInfoResult = await toAsyncResult(retrieveFreshBuildInfo(), {
-    debug: opts.debug,
-  });
+  const freshBuildInfoResult = await toAsyncResult(
+    retrieveFreshCompilationArtifact(artifactPath),
+    {
+      debug: opts.debug,
+    },
+  );
   if (!freshBuildInfoResult.success) {
+    throw new ScriptError(`❌ Error retrieving the compilation artifact`);
+  }
+
+  if (freshBuildInfoResult.value.status === "error") {
     throw new ScriptError(
-      `❌ Error retrieving the build info for the compilation. Please, make sure to have a unique build info file in the "artifacts/build-info" folder.`,
+      `❌ Error retrieving the compilation artifact. ${freshBuildInfoResult.value.reason}`,
     );
   }
 
