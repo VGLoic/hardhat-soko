@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import {
   ZBuildInfo,
-  type ContractInfo,
+  type CompilerOutputContract,
   toAsyncResult,
   retrieveFreshCompilationArtifact,
   ScriptError,
@@ -208,7 +208,9 @@ export async function generateDiffWithTargetRelease(
 async function generateContractHashes(
   buildInfoContent: string,
 ): Promise<Map<string, string>> {
-  const buildInfoResult = ZBuildInfo.safeParse(JSON.parse(buildInfoContent));
+  const buildInfoResult = ZBuildInfo.passthrough().safeParse(
+    JSON.parse(buildInfoContent),
+  );
   if (!buildInfoResult.success) {
     throw new Error(`Invalid build info file: ${buildInfoResult.error}`);
   }
@@ -226,7 +228,7 @@ async function generateContractHashes(
   return contractHashes;
 }
 
-function hashContract(contract: ContractInfo): string {
+function hashContract(contract: CompilerOutputContract): string {
   const hash = createHash("sha256");
 
   contract.abi.sort((a, b) => a.name.localeCompare(b.name));

@@ -69,7 +69,7 @@ const ZBytecode = z.object({
     .optional(),
 });
 
-const ZContractOutput = z.object({
+const ZCompilerOutputContract = z.object({
   // The Ethereum Contract ABI. If empty, it is represented as an empty array.
   // See https://docs.soliditylang.org/en/develop/abi-spec.html
   abi: z.array(
@@ -116,16 +116,16 @@ const ZContractOutput = z.object({
     // Function gas estimates
     gasEstimates: z
       .object({
-        creation: z.record(z.string(), z.string()),
-        external: z.record(z.string(), z.string()),
-        internal: z.record(z.string(), z.string()),
+        creation: z.record(z.string(), z.string()).optional(),
+        external: z.record(z.string(), z.string()).optional(),
+        internal: z.record(z.string(), z.string()).optional(),
       })
       .optional(),
     // The list of function hashes
     methodIdentifiers: z.record(z.string(), z.string()).optional(),
   }),
 });
-export type ContractInfo = z.infer<typeof ZContractOutput>;
+export type CompilerOutputContract = z.infer<typeof ZCompilerOutputContract>;
 const ZSettings = z.object({
   viaIR: z.boolean().optional(),
   optimizer: z.object({
@@ -152,14 +152,17 @@ export const ZBuildInfo = z.object({
   id: z.string(),
   solcVersion: z.string(),
   solcLongVersion: z.string(),
-  _format: z.string(),
+  _format: z.string().optional(),
   input: z.object({
     language: z.string(),
     sources: z.record(z.string(), ZJson),
     settings: ZSettings,
   }),
   output: z.object({
-    contracts: z.record(z.string(), z.record(z.string(), ZContractOutput)),
+    contracts: z.record(
+      z.string(),
+      z.record(z.string(), ZCompilerOutputContract),
+    ),
     sources: z.record(z.string(), z.object({ id: z.number(), ast: ZJson })),
   }),
 });
@@ -258,7 +261,7 @@ export async function retrieveFreshCompilationArtifact(
   const contentResult = await toAsyncResult(
     fs.readFile(compilationArtifactPath, "utf-8").then((data) => {
       const firstParsing = JSON.parse(data);
-      ZBuildInfo.parse(firstParsing);
+      ZBuildInfo.passthrough().parse(firstParsing);
       return data;
     }),
   );

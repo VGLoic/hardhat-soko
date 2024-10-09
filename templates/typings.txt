@@ -110,7 +110,7 @@ async function getArtifact(
   project: string,
   tag: string,
   contractKey: string,
-): Promise<unknown> {
+): Promise<CompilerOutputContract> {
   const buildInfoResult = await toAsyncResult(
     getCompilationArtifact(project, tag),
   );
@@ -131,8 +131,7 @@ async function getArtifact(
       `Invalid contract key: ${contractKey}. Expected format: "path/to/Contract.sol:Contract"`,
     );
   }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const contractArtifact = (buildInfoResult.value as any).output.contracts[
+  const contractArtifact = buildInfoResult.value.output.contracts[
     contractPath
   ][contractName];
   if (!contractArtifact) {
@@ -152,7 +151,7 @@ async function getArtifact(
 async function getCompilationArtifact(
   project: string,
   tag: string,
-): Promise<unknown> {
+): Promise<BuildInfo> {
   const buildInfoExists = await fs
     .stat(`${SOKO_PATH}/${project}/tags/${tag}.json`)
     .catch(() => false);
@@ -186,4 +185,112 @@ function toAsyncResult<T, TError = Error>(
       }
       return { success: false as const, error };
     });
+}
+
+/**
+ * @dev These types are imported from hardhat/types
+ * They are extended with our knowledge of the types
+ */
+interface BuildInfo {
+  id: string;
+  solcVersion: string;
+  solcLongVersion: string;
+  _format?: string;
+  input: CompilerInput;
+  output: CompilerOutput;
+}
+
+interface CompilerInput {
+  language: string;
+  sources: { [sourceName: string]: { content: string } };
+  settings: {
+    viaIR?: boolean;
+    optimizer: {
+      runs?: number;
+      enabled?: boolean;
+      details?: {
+        yulDetails: {
+          optimizerSteps: string;
+        };
+      };
+    };
+    metadata?: { useLiteralContent: boolean };
+    outputSelection: {
+      [sourceName: string]: {
+        [contractName: string]: string[];
+      };
+    };
+    evmVersion?: string;
+    libraries?: {
+      [libraryFileName: string]: {
+        [libraryName: string]: string;
+      };
+    };
+    remappings?: string[];
+  };
+}
+
+interface CompilerOutput {
+  sources: CompilerOutputSources;
+  contracts: {
+    [sourceName: string]: {
+      [contractName: string]: CompilerOutputContract;
+    };
+  };
+}
+
+interface CompilerOutputSources {
+  [sourceName: string]: CompilerOutputSource;
+}
+
+interface CompilerOutputSource {
+  id: number;
+  ast: unknown;
+}
+
+interface CompilerOutputContract {
+  abi: unknown[];
+  metadata?: string;
+  userdoc?: unknown;
+  devdoc?: unknown;
+  ir?: string;
+  irAst?: unknown;
+  irOptimized?: string;
+  irOptimizedAst?: unknown;
+  storageLayout?: {
+    storage: unknown[];
+    types: unknown;
+  };
+  transientStorageLayout?: unknown;
+  evm: {
+    assembly?: string;
+    bytecode: CompilerOutputBytecode;
+    deployedBytecode?: CompilerOutputBytecode;
+    gasEstimates?: {
+      creation?: Record<string, string>;
+      external?: Record<string, string>;
+      internal?: Record<string, string>;
+    };
+    methodIdentifiers?: {
+      [methodSignature: string]: string;
+    };
+  };
+}
+
+interface CompilerOutputBytecode {
+  functionDebugData?: Record<string, unknown>;
+  object: string;
+  opcodes: string;
+  sourceMap?: string;
+  generatedSources: unknown[];
+  linkReferences: LinkReferences;
+  immutableReferences?: {
+    [key: string]: Array<{ start: number; length: number }>;
+  };
+}
+
+interface LinkReferences {
+  [libraryFileName: string]: {
+    [libraryName: string]: Array<{ length: number; start: number }>;
+  };
 }
