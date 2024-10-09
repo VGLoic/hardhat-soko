@@ -1,5 +1,11 @@
 # hardhat-soko
 
+## 0.6.4
+
+### Patch Changes
+
+- e8469b4: Fix tags and contracts listing
+
 ## 0.6.3
 
 ### Patch Changes
