@@ -1,5 +1,15 @@
 # hardhat-soko
 
+## 0.6.0
+
+### Minor Changes
+
+- fe81b25: Rework storage of compilation artifacts, setup projects, limit API surface
+
+### Patch Changes
+
+- 7106569: Update node lts
+
 ## 0.5.3
 
 ### Patch Changes
