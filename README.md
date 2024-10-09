@@ -170,7 +170,7 @@ npx hardhat soko typings
 > ![INFO]
 > If no projects have been pulled, one can still generate the default typings using this command. It may be helpful for those who do not care about the scripts involving Soko but want to be unblocked in case of missing files.
 
-### Describe
+### List
 
 List the pulled projects and their compilation artifacts.
 
