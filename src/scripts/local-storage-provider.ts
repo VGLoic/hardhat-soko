@@ -1,6 +1,6 @@
 import fs from "fs/promises";
 import { Stream } from "stream";
-import { ZBuildInfo } from "./utils";
+import { ZBuildInfo } from "../utils";
 import { z } from "zod";
 import crypto from "crypto";
 
