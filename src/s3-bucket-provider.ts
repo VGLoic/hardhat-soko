@@ -45,7 +45,7 @@ export class S3BucketProvider implements StorageProvider {
       },
     });
 
-    this.rootPath = config.rootPath || "v3";
+    this.rootPath = config.rootPath || "";
     this.config = config;
     this.client = s3Client;
   }
