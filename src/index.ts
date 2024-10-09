@@ -12,10 +12,10 @@ import { generateStructuredDataForArtifacts } from "./scripts/list";
 import { generateDiffWithTargetRelease } from "./scripts/diff";
 
 export type SokoHardhatUserConfig = {
-  // Local directory in which artifacts will be pulled
+  // Local path in which artifacts will be pulled
   // Default to `.soko`
   pulledArtifactsPath?: string;
-  // Local directory in which typings will be generated
+  // Local path in which typings will be generated
   // Default to `.soko-typings`
   typingsPath?: string;
   // Configuration of the storage where the artifacts will be stored
@@ -116,12 +116,12 @@ sokoScope
     `Fake flag - Task description: Pull one or many artifacts of a project.
 
 One artifact can be pulled by tag
-  npx hardhat soko pull my-project:v1.2.3
+  npx hardhat soko pull --artifact my-project:v1.2.3
 or by ID
-  soko pull my-project:dcauXtavGLxC
+  npx hardhat soko pull --artifact my-project:dcauXtavGLxC
 
 All artifacts for a project can be downloaded
-  npx hardhat soko pull my-project
+  npx hardhat soko pull --artifact my-project
 
 Already downloaded artifacts are not downloaded again by default, enable the force flag to force the download.
 
@@ -293,11 +293,11 @@ sokoScope
     "aa",
     `Fake flag - Task description: Push a compilation artifact.
 
-The artifact will be stored in the input project (through the "-t" flag). An identifier is derived for the artifact.
-  npx hardhat soko push ./path/to-my-artifact/artifact.json -t my-project
+The artifact will be stored in the input project (through the "--tag" flag). An identifier is derived for the artifact.
+  npx hardhat soko push --artifact-path ./path/to-my-artifact/artifact.json --tag my-project
 
-If a tag is provided, the artifact will also be identified by it:
-  npx hardhat soko push ./path/to-my-artifact/artifact.json -t my-project:v1.2.3
+If a tag is provided in addition to the project, the artifact will also be identified by it:
+  npx hardhat soko push --artifact-path ./path/to-my-artifact/artifact.json --tag my-project:v1.2.3
 
 If the provided tag already exists in the storage, the push will be aborted unless the force flag is enabled.
 

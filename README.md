@@ -56,8 +56,8 @@ export const config: HardhatUserConfig = {
   ... // Existing configuration
   // Example configuration for Soko with AWS S3 as storage for releases
   soko: {
-    directory: ".soko",
-    typingsDirectory: ".soko-typings",
+    pulledArtifactsPath: ".soko",
+    typingsPath: ".soko-typings",
     storageConfiguration: {
       type: "aws",
       awsRegion: AWS_REGION,
@@ -73,13 +73,13 @@ Here is the detailled TypeScript type of the configuration
 
 ```ts
 type SokoHardhatUserConfig = {
-  // Local directory in which releases will be pulled
+  // Local path in which artifacts will be pulled
   // Default to `.soko`
-  directory?: string;
-  // Local directory in which typings will be generated
+  pulledArtifactsPath?: string;
+  // Local path in which typings will be generated
   // Default to `.soko-typings`
-  typingsDirectory?: string;
-  // Configuration of the storage where the release will be stored
+  typingsPath?: string;
+  // Configuration of the storage where the artifacts will be stored
   // Only AWS is supported for now
   storageConfiguration: {
     type: "aws";
@@ -92,6 +92,22 @@ type SokoHardhatUserConfig = {
   // Default to `false`
   debug?: boolean;
 };
+```
+
+## Projects, tags and IDs
+
+**An ID, e.g. dcauXtavGLxC, is derived for each compilation artifact**. The ID is based on the content of the artifact.
+
+**A tag, e.g. v1.2.3, can be associated to a compilation when pushed.**
+
+**A project, e.g. my-project, will gather many compilation artifacts.**
+
+**A compilation artifact is fully referenced by the project in which it belongs and its tag or ID, formatted as `<project>:<tag or ID>`**.
+
+As an example, in order to pull the compilation artifact `my-project:v1.2.3`:
+
+```bash
+npx hardhat soko pull --artifact my-project:v1.2.3
 ```
 
 ## Tasks
@@ -108,44 +124,58 @@ npx hardhat soko
 Help about any task scopped under soko is available:
 
 ```bash
-npx hardhat help soko pull
-```
-
-### Pull
-
-Pull locally the missing releases from the configured releases storage and generate the associated typings.
-
-```bash
-npx hardhat soko pull
+npx hardhat help soko push
 ```
 
 ### Push
 
-Push a local compilation artifact as a new release. This script assumes that there is an existing compilation artifact in the local Hardhat `artifacts` folder.
+Push a local compilation artifact to the storage, creating the remote artifact with its ID and optionally tagging it.
+
+Only push the compilation artifact without an additional tag:
 
 ```bash
-npx hardhat soko push --release v1.2.3
+npx hardhat soko push --artifact-path ./path/to/my/artifact.json --tag project
+```
+
+Or use a tag to associate the compilation artifact with it
+
+```bash
+npx hardhat soko push --artifact-path ./path/to/my/artifact.json --tag project:tag
+```
+
+### Pull
+
+Pull locally the missing artifacts from the configured storage.
+
+One can pull all the artifacts from a project
+
+```bash
+npx hardhat soko pull --artifact project
+```
+
+Or target a specific artifact using its tag or ID:
+
+```bash
+npx hardhat soko pull --artifact project:[tag|ID]
 ```
 
 ### Typings
 
-Generate the TypeScript typings based on the pulled releases.
+Once the artifacts have been pulled, one can generate the TypeScript typings based on the pulled projects.
 
 ```bash
 npx hardhat soko typings
 ```
 
 > ![INFO]
-> If no releases have been pulled, one can still generate the default typings using this command. It may be helpful for those who do not care about the scripts involving Soko but want to be unblocked in case of missing files.
-
-By default, similar contracts in subsequent releases are filtered. Comparison is based on ABI and bytecode. This behaviour can be disabled using the `--no-filter` flag.
+> If no projects have been pulled, one can still generate the default typings using this command. It may be helpful for those who do not care about the scripts involving Soko but want to be unblocked in case of missing files.
 
 ### Describe
 
-Describe the pulled releases and their contents.
+List the pulled projects and their compilation artifacts.
 
 ```bash
-npx hardhat soko describe
+npx hardhat soko list
 ```
 
 ### Diff
@@ -153,7 +183,7 @@ npx hardhat soko describe
 Compare a local compilation artifacts with an existing release and print the contracts for which differences have been found.
 
 ```bash
-npx hardhat soko diff --release latest
+npx hardhat soko diff --artifact-path ./path/to/my/artifact.json --tag project:[tag|ID]
 ```
 
 ## Using the typings
@@ -165,30 +195,30 @@ There are two available utils in order to retrieve a contract artifact, it would
 - start with a contract, select one of its available release
 
 ```ts
-import { contract } from "../.soko-typings";
+import { project } from "../.soko-typings";
 
-const artifact = await contract(
-  "src/path/to/my/contract.sol:MyExampleContract",
-).getArtifact("v1.2.3");
+const artifact = await project("my-project")
+  .contract("src/path/to/my/contract.sol:MyExampleContract")
+  .getArtifact("v1.2.3");
 ```
 
-- start with a release, select a contract within it
+- start with a tag, select a contract within it
 
 ```ts
-import { release } from "../.soko-typings";
+import { project } from "../.soko-typings";
 
-const artifact = await release("v1.2.3").getContractArtifact(
-  "src/path/to/my/contract.sol:MyExampleContract",
-);
+const artifact = await project("my-project")
+  .tag("v1.2.3")
+  .getContractArtifact("src/path/to/my/contract.sol:MyExampleContract");
 ```
 
-If typings have been generated from existing releases, the inputs of the utils will be strongly typed and wrong release name or incorrect contract name will be detected.
+If typings have been generated from existing projects, the inputs of the utils will be strongly typed and wrong project, tags or contracts names will be detected.
 
-In case there are no releases or the releases have not been pulled, the generated typings are made in such a way that strong typecheck disappears and any string can be used with the helper functions.
+In case there are no projects or the projects have not been pulled, the generated typings are made in such a way that strong typecheck disappears and any string can be used with the helper functions.
 
 ### Release complete artifact
 
-A complete artifact, i.e. the whole `build info` of a release can be retrieved using the `getReleaseBuildInfo`.
+The complete compilation artifact of a tag can be retrieved using the `project("my-project").tag("v1.2.3").getCompilationArtifact` method.
 
 ### Example with hardhat-deploy
 
@@ -199,17 +229,16 @@ The advantage of this deployment is that it only works with frozen artifacts. Ne
 ```ts
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 import { DeployFunction } from "hardhat-deploy/types";
-import { contract } from "../.soko-typings";
+import { project } from "../.soko-typings";
 
 const deployMyExample: DeployFunction = async function (
   hre: HardhatRuntimeEnvironment,
 ) {
   const { deployer } = await hre.getNamedAccounts();
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const myExampleArtifact: any = await contract(
-    "src/Example.sol:MyExample",
-  ).getArtifact("v1.2.3");
+  const myExampleArtifact = await project("my-project")
+    .contract("src/Example.sol:MyExample")
+    .getArtifact("v1.2.3");
 
   await hre.deployments.deploy(`MyExample@v1.2.3`, {
     contract: {
