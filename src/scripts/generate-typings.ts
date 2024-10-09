@@ -1,6 +1,6 @@
 import fs from "fs/promises";
 import { toAsyncResult, LOG_COLORS, ScriptError } from "../utils";
-import { LocalStorageProvider } from "../local-storage-provider";
+import { LocalStorageProvider } from "./local-storage-provider";
 
 /**
  * Based from the Soko releases folder content, generate a `summary-exports.ts`, a `summary.json` and a `index.ts` files in the Soko typings folder.

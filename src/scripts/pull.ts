@@ -1,7 +1,7 @@
 import { toAsyncResult } from "../utils";
 import { LOG_COLORS, ScriptError } from "../utils";
 import { StorageProvider } from "../s3-bucket-provider";
-import { LocalStorageProvider } from "../local-storage-provider";
+import { LocalStorageProvider } from "./local-storage-provider";
 
 /**
  * Pulls artifacts of a project from the storage provider

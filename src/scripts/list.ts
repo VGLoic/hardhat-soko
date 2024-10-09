@@ -1,4 +1,4 @@
-import { LocalStorageProvider } from "../local-storage-provider";
+import { LocalStorageProvider } from "./local-storage-provider";
 import { ScriptError, toAsyncResult } from "../utils";
 
 type ArtifactMetadata = {

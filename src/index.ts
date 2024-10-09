@@ -7,7 +7,7 @@ import { S3BucketProvider } from "./s3-bucket-provider";
 import { pull } from "./scripts/pull";
 import { generateArtifactsSummariesAndTypings } from "./scripts/generate-typings";
 import { pushArtifact } from "./scripts/push";
-import { LocalStorageProvider } from "./local-storage-provider";
+import { LocalStorageProvider } from "./scripts/local-storage-provider";
 import { generateStructuredDataForArtifacts } from "./scripts/list";
 import { generateDiffWithTargetRelease } from "./scripts/diff";
 
