@@ -1,5 +1,11 @@
 # hardhat-soko
 
+## 0.6.3
+
+### Patch Changes
+
+- 562e64a: change encoding of id to hex
+
 ## 0.6.2
 
 ### Patch Changes
