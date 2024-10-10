@@ -231,7 +231,12 @@ async function generateContractHashes(
 function hashContract(contract: CompilerOutputContract): string {
   const hash = createHash("sha256");
 
-  contract.abi.sort((a, b) => a.name.localeCompare(b.name));
+  contract.abi.sort((a, b) => {
+    return a?.name.localeCompare(b?.name);
+    if ("name" in a && "name" in b) {
+      return a.name.localeCompare(b.name);
+    }
+  });
   for (const abiItem of contract.abi) {
     hash.update(JSON.stringify(abiItem));
   }
