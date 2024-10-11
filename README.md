@@ -54,7 +54,7 @@ import "hardhat-soko";
 
 export const config: HardhatUserConfig = {
   ... // Existing configuration
-  // Example configuration for Soko with AWS S3 as storage for releases
+  // Example configuration for Soko with AWS S3 as storage for compilation artifacts
   soko: {
     pulledArtifactsPath: ".soko",
     typingsPath: ".soko-typings",
@@ -180,7 +180,7 @@ npx hardhat soko list
 
 ### Diff
 
-Compare a local compilation artifacts with an existing release and print the contracts for which differences have been found.
+Compare a local compilation artifacts with an existing compilation artifact and print the contracts for which differences have been found.
 
 ```bash
 npx hardhat soko diff --artifact-path ./path/to/my/artifact.json --tag project:[tag|ID]
@@ -192,7 +192,7 @@ The typings are exposed in order to help the developer retrieve easily and safel
 
 There are two available utils in order to retrieve a contract artifact, it would depend on the task at hand:
 
-- start with a contract, select one of its available release
+- start with a contract, select one of its available tag
 
 ```ts
 import { project } from "../.soko-typings";
@@ -216,9 +216,9 @@ If typings have been generated from existing projects, the inputs of the utils w
 
 In case there are no projects or the projects have not been pulled, the generated typings are made in such a way that strong typecheck disappears and any string can be used with the helper functions.
 
-### Release complete artifact
+### Retrieve full compilation artifact
 
-The complete compilation artifact of a tag can be retrieved using the `project("my-project").tag("v1.2.3").getCompilationArtifact` method.
+The full compilation artifact of a tag can be retrieved using the `project("my-project").tag("v1.2.3").getCompilationArtifact` method.
 
 ### Example with hardhat-deploy
 
