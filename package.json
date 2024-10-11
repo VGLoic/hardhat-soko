@@ -1,8 +1,12 @@
 {
   "name": "hardhat-soko",
   "version": "0.6.4",
-  "description": "Hardhat plugin for managing released compilation artifacts",
+  "description": "Hardhat plugin for managing compilation artifacts",
   "author": "Loïc Vincent-Genod",
+  "homepage": "https://github.com/VGLoic/hardhat-soko",
+  "bugs": {
+    "url": "https://github.com/VGLoic/hardhat-soko/issues"
+  },
   "license": "MIT",
   "files": [
     "dist",
@@ -42,6 +46,8 @@
   ],
   "dependencies": {
     "@aws-sdk/client-s3": "^3.624.0",
+    "@ethersproject/keccak256": "^5.7.0",
+    "@ethersproject/strings": "^5.7.0",
     "@smithy/types": "^3.3.0",
     "zod": "^3.23.8"
   },

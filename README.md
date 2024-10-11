@@ -1,6 +1,6 @@
 # Hardhat Soko
 
-Hardhat plugin in order to manage your smart contract artifacts from a remote location.
+Hardhat plugin in order to manage your smart contract compilation artifacts.
 
 1. [Motivation](#motivation),
 2. [Installation](#installation),
@@ -10,9 +10,9 @@ Hardhat plugin in order to manage your smart contract artifacts from a remote lo
 
 ## Motivation
 
-When compiling the smart contracts, the developer will generate _compilation artifacts_ that contain all the needed informations for further tasks such as deployment, verification or simple contract interactions.
+When compiling the smart contracts, the developer will generate _compilation artifacts_. They will contain all the needed informations for further tasks such as deployment, verification or simple contract interactions.
 
-These compilation artifacts are however generally ignored and not stored. At best, compilation artifact for a contract is contained within its deployment summary. Not having a clear way of identifying or re-using an artifact is a painful experience for all developers working closely or remotely with the smart contracts:
+These compilation artifacts are generally ignored and not commited nor stored. At best, compilation artifact for a contract is contained within its deployment summary. Not having a clear way of identifying or re-using an artifact is a painful experience for all developers working closely or remotely with the smart contracts:
 
 - the smart contract developer is afraid of erasing artifacts that are still needed when developing new features,
 - the "smart contract devops" has to execute the deployment or interaction scripts with artifact that are meant to be thrown away, it complexifies drastically the sharing of ABIs and deployments to the rest of the team,
@@ -54,7 +54,7 @@ import "hardhat-soko";
 
 export const config: HardhatUserConfig = {
   ... // Existing configuration
-  // Example configuration for Soko with AWS S3 as storage for releases
+  // Example configuration for Soko with AWS S3 as storage for compilation artifacts
   soko: {
     pulledArtifactsPath: ".soko",
     typingsPath: ".soko-typings",
@@ -96,11 +96,11 @@ type SokoHardhatUserConfig = {
 
 ## Projects, tags and IDs
 
-**An ID, e.g. dcauXtavGLxC, is derived for each compilation artifact**. The ID is based on the content of the artifact.
+**An ID, e.g. `dcauXtavGLxC`, is derived for each compilation artifact**. The ID is based on the content of the artifact.
 
-**A tag, e.g. v1.2.3, can be associated to a compilation when pushed.**
+**A tag, e.g. `v1.2.3`, can be associated to a compilation artifact when pushed.**
 
-**A project, e.g. my-project, will gather many compilation artifacts.**
+**A project, e.g. `my-project`, will gather many compilation artifacts.**
 
 **A compilation artifact is fully referenced by the project in which it belongs and its tag or ID, formatted as `<project>:<tag or ID>`**.
 
@@ -180,7 +180,7 @@ npx hardhat soko list
 
 ### Diff
 
-Compare a local compilation artifacts with an existing release and print the contracts for which differences have been found.
+Compare a local compilation artifacts with an existing compilation artifact and print the contracts for which differences have been found.
 
 ```bash
 npx hardhat soko diff --artifact-path ./path/to/my/artifact.json --tag project:[tag|ID]
@@ -192,7 +192,7 @@ The typings are exposed in order to help the developer retrieve easily and safel
 
 There are two available utils in order to retrieve a contract artifact, it would depend on the task at hand:
 
-- start with a contract, select one of its available release
+- start with a contract, select one of its available tag
 
 ```ts
 import { project } from "../.soko-typings";
@@ -216,9 +216,9 @@ If typings have been generated from existing projects, the inputs of the utils w
 
 In case there are no projects or the projects have not been pulled, the generated typings are made in such a way that strong typecheck disappears and any string can be used with the helper functions.
 
-### Release complete artifact
+### Retrieve full compilation artifact
 
-The complete compilation artifact of a tag can be retrieved using the `project("my-project").tag("v1.2.3").getCompilationArtifact` method.
+The full compilation artifact of a tag can be retrieved using the `project("my-project").tag("v1.2.3").getCompilationArtifact` method.
 
 ### Example with hardhat-deploy
 
