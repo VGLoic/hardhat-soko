@@ -7,6 +7,13 @@
   "bugs": {
     "url": "https://github.com/VGLoic/hardhat-soko/issues"
   },
+  "keywords": [
+    "web3",
+    "ethereum",
+    "smart contracts",
+    "hardhat",
+    "plugin"
+  ],
   "license": "MIT",
   "files": [
     "dist",
@@ -37,13 +44,6 @@
     "changeset": "changeset",
     "release": "npm run build && changeset publish"
   },
-  "keywords": [
-    "web3",
-    "ethereum",
-    "smart contracts",
-    "hardhat",
-    "plugin"
-  ],
   "dependencies": {
     "@aws-sdk/client-s3": "^3.624.0",
     "@ethersproject/keccak256": "^5.7.0",
