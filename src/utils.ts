@@ -457,7 +457,7 @@ function checkCompilationArtifactsFolder(entries: Dirent[]):
   if (entries.length > 1) {
     return {
       status: "error",
-      reason: `Found multiple potential compilation artifacts in the Hardhat build info folders. Please provide a more precise path.`,
+      reason: `Found multiple potential compilation artifacts in the identified build info folder. Please provide a more precise path.`,
     };
   } else {
     return {
