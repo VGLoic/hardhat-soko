@@ -1,5 +1,11 @@
 # hardhat-soko
 
+## 0.7.0
+
+### Minor Changes
+
+- 853206c: Support Forge compilation output
+
 ## 0.6.4
 
 ### Patch Changes
