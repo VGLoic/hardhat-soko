@@ -20,10 +20,6 @@ export function toAsyncResult<T, TError = Error>(
     });
 }
 
-export function completeMessage(message: string, opts: { debug: boolean }) {
-  return `Soko: ${message}${opts.debug ? "" : "\nFor more information, please run the same command with the `debug` flag or set `debug: true` option in Soko configuration of the `hardhat.config` file"}`;
-}
-
 export class ScriptError extends Error {
   constructor(message: string) {
     super(message);
