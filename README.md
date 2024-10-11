@@ -112,7 +112,7 @@ npx hardhat soko pull --artifact my-project:v1.2.3
 
 ## Tasks
 
-> [!INFO]
+> [!NOTE]
 > The code snippets in this section uses `npx` but one can choose something else
 
 An overview of the Soko tasks is exposed by running the `soko` task:
@@ -167,7 +167,7 @@ Once the artifacts have been pulled, one can generate the TypeScript typings bas
 npx hardhat soko typings
 ```
 
-> [!INFO]
+> [!NOTE]
 > If no projects have been pulled, one can still generate the default typings using this command. It may be helpful for those who do not care about the scripts involving Soko but want to be unblocked in case of missing files.
 
 ### List
