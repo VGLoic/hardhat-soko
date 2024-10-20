@@ -56,6 +56,7 @@ export const config: HardhatUserConfig = {
   ... // Existing configuration
   // Example configuration for Soko with AWS S3 as storage for compilation artifacts
   soko: {
+    project: "awesome-stuff",
     pulledArtifactsPath: ".soko",
     typingsPath: ".soko-typings",
     storageConfiguration: {
@@ -73,6 +74,8 @@ Here is the detailled TypeScript type of the configuration
 
 ```ts
 type SokoHardhatUserConfig = {
+  // The name of the project
+  project: string;
   // Local path in which artifacts will be pulled
   // Default to `.soko`
   pulledArtifactsPath?: string;
@@ -102,13 +105,7 @@ type SokoHardhatUserConfig = {
 
 **A project, e.g. `my-project`, will gather many compilation artifacts.**
 
-**A compilation artifact is fully referenced by the project in which it belongs and its tag or ID, formatted as `<project>:<tag or ID>`**.
-
-As an example, in order to pull the compilation artifact `my-project:v1.2.3`:
-
-```bash
-npx hardhat soko pull --artifact my-project:v1.2.3
-```
+A project is setup at the level of the Hardhat Config, it will be used when pushing new artifacts or as default for the other commands. It is however possible to pull any projects you control.
 
 ## Tasks
 
@@ -129,34 +126,36 @@ npx hardhat help soko push
 
 ### Push
 
-Push a local compilation artifact to the storage, creating the remote artifact with its ID and optionally tagging it.
+Push a local compilation artifact for the configured project to the storage, creating the remote artifact with its ID and optionally tagging it.
 
 Only push the compilation artifact without an additional tag:
 
 ```bash
-npx hardhat soko push --artifact-path ./path/to/my/artifact.json --tag project
+npx hardhat soko push --artifact-path ./path/to/my/artifact.json
 ```
 
 Or use a tag to associate the compilation artifact with it
 
 ```bash
-npx hardhat soko push --artifact-path ./path/to/my/artifact.json --tag project:tag
+npx hardhat soko push --artifact-path ./path/to/my/artifact.json --tag v1.2.3
 ```
 
 ### Pull
 
 Pull locally the missing artifacts from the configured storage.
 
-One can pull all the artifacts from a project
+One can pull all the artifacts from the configured project
 
 ```bash
-npx hardhat soko pull --artifact project
+npx hardhat soko pull
 ```
 
-Or target a specific artifact using its tag or ID:
+Or target a specific artifact using its tag or ID or another project:
 
 ```bash
-npx hardhat soko pull --artifact project:[tag|ID]
+npx hardhat soko pull --id 123456
+npx hardhat soko pull --tag v1.2.3
+npx hardhat soko pull --tag v4.5.6 --project another-project
 ```
 
 ### Typings
@@ -183,7 +182,8 @@ npx hardhat soko list
 Compare a local compilation artifacts with an existing compilation artifact and print the contracts for which differences have been found.
 
 ```bash
-npx hardhat soko diff --artifact-path ./path/to/my/artifact.json --tag project:[tag|ID]
+npx hardhat soko diff --artifact-path ./path/to/my/artifact.json --tag v1.2.3
+npx hardhat soko diff --artifact-path ./path/to/my/artifact.json --id 123456
 ```
 
 ## Using the typings
