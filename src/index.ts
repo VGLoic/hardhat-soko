@@ -12,6 +12,8 @@ import { generateStructuredDataForArtifacts } from "./scripts/list";
 import { generateDiffWithTargetRelease } from "./scripts/diff";
 
 export type SokoHardhatUserConfig = {
+  // The name of the project
+  project: string;
   // Local path in which artifacts will be pulled
   // Default to `.soko`
   pulledArtifactsPath?: string;
@@ -33,6 +35,7 @@ export type SokoHardhatUserConfig = {
 };
 
 const SokoHardhatConfig = z.object({
+  project: z.string().min(1),
   pulledArtifactsPath: z.string().default(".soko"),
   typingsPath: z.string().default(".soko-typings"),
   storageConfiguration: z.object({
@@ -82,55 +85,41 @@ extendConfig(
 
 const sokoScope = scope("soko", "Soko Hardhat tasks");
 
-const ZArtifactName = z
-  .string()
-  .min(1)
-  .transform((value, ctx): { project: string; tagOrId: string | undefined } => {
-    const elements = value.split(":");
-    if (elements.length > 2) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message:
-          "The artifact name should be formatted as `project` or `project:tag|ID`",
-      });
-      return z.NEVER;
-    }
-    if (elements.some((el) => el === "")) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message:
-          "The artifact name should be formatted as `project` or `project:tag|ID`",
-      });
-      return z.NEVER;
-    }
-    if (elements.length === 1) {
-      return { project: elements[0], tagOrId: undefined };
-    }
-    return { project: elements[0], tagOrId: elements[1] };
-  });
-
 sokoScope
   .task("pull", "Pull one or many artifacts of a project.")
   .addFlag(
     "aa",
     `Fake flag - Task description: Pull one or many artifacts of a project.
 
+By default, the project is the one configured in the Hardhat configuration.
+
 One artifact can be pulled by tag
-  npx hardhat soko pull --artifact my-project:v1.2.3
+  npx hardhat soko pull --tag v1.2.3
 or by ID
-  npx hardhat soko pull --artifact my-project:dcauXtavGLxC
+  npx hardhat soko pull --id dcauXtavGLxC
 
 All artifacts for a project can be downloaded
-  npx hardhat soko pull --artifact my-project
+  npx hardhat soko pull
+
+A different project can be specified
+  npx hardhat soko pull --project another-project
 
 Already downloaded artifacts are not downloaded again by default, enable the force flag to force the download.
 
 
 `,
   )
-  .addParam(
-    "artifact",
-    "The artifact to pull, formatted as `project` or `project:tag|ID`",
+  .addOptionalParam(
+    "id",
+    "The ID of the artifact to pull, can not be used with the `tag` parameter",
+  )
+  .addOptionalParam(
+    "tag",
+    "The tag of the artifact to pull, can not be used with the `id` parameter",
+  )
+  .addOptionalParam(
+    "project",
+    "The project to pull the artifacts from, defaults to the configured project",
   )
   .addFlag(
     "force",
@@ -147,7 +136,9 @@ Already downloaded artifacts are not downloaded again by default, enable the for
 
     const optsParsingResult = z
       .object({
-        artifact: ZArtifactName,
+        id: z.string().optional(),
+        tag: z.string().optional(),
+        project: z.string().optional().default(sokoConfig.project),
         force: z.boolean().default(false),
         debug: z.boolean().default(sokoConfig.debug),
       })
@@ -161,15 +152,24 @@ Already downloaded artifacts are not downloaded again by default, enable the for
       return;
     }
 
-    if (optsParsingResult.data.artifact.tagOrId) {
+    if (optsParsingResult.data.id && optsParsingResult.data.tag) {
+      console.error(
+        LOG_COLORS.error,
+        "❌ The ID and tag parameters can not be used together",
+      );
+      process.exitCode = 1;
+      return;
+    }
+
+    if (optsParsingResult.data.id || optsParsingResult.data.tag) {
       console.error(
         LOG_COLORS.log,
-        `\nPulling the artifact "${optsParsingResult.data.artifact.project}:${optsParsingResult.data.artifact.tagOrId}"`,
+        `\nPulling the artifact "${optsParsingResult.data.project}:${optsParsingResult.data.id || optsParsingResult.data.tag}"`,
       );
     } else {
       console.error(
         LOG_COLORS.log,
-        `\nPulling the missing artifacts of project "${optsParsingResult.data.artifact.project}"`,
+        `\nPulling the missing artifacts of project "${optsParsingResult.data.project}"`,
       );
     }
 
@@ -185,7 +185,7 @@ Already downloaded artifacts are not downloaded again by default, enable the for
     );
 
     const ensureResult = await toAsyncResult(
-      localProvider.ensureProjectSetup(optsParsingResult.data.artifact.project),
+      localProvider.ensureProjectSetup(optsParsingResult.data.project),
       { debug: optsParsingResult.data.debug },
     );
     if (!ensureResult.success) {
@@ -205,8 +205,8 @@ Already downloaded artifacts are not downloaded again by default, enable the for
 
     const pullResult = await toAsyncResult(
       pull(
-        optsParsingResult.data.artifact.project,
-        optsParsingResult.data.artifact.tagOrId,
+        optsParsingResult.data.project,
+        optsParsingResult.data.id || optsParsingResult.data.tag,
         {
           debug: optsParsingResult.data.debug,
           force: optsParsingResult.data.force,
@@ -244,7 +244,7 @@ Already downloaded artifacts are not downloaded again by default, enable the for
     ) {
       console.error(
         LOG_COLORS.success,
-        `\nYou're up to date with project "${optsParsingResult.data.artifact.project}"`,
+        `\nYou're up to date with project "${optsParsingResult.data.project}"`,
       );
     } else {
       if (pullResult.value.pulledTags.length > 0) {
@@ -293,21 +293,18 @@ sokoScope
     "aa",
     `Fake flag - Task description: Push a compilation artifact.
 
-The artifact will be stored in the input project (through the "--tag" flag). An identifier is derived for the artifact.
-  npx hardhat soko push --artifact-path ./path/to-my-artifact/artifact.json --tag my-project
+The artifact will be stored in the configured project. An identifier is derived for the artifact.
+  npx hardhat soko push --artifact-path ./path/to-my-artifact/artifact.jsont
 
-If a tag is provided in addition to the project, the artifact will also be identified by it:
-  npx hardhat soko push --artifact-path ./path/to-my-artifact/artifact.json --tag my-project:v1.2.3
+If a tag is provided, the artifact will also be identified by it:
+  npx hardhat soko push --artifact-path ./path/to-my-artifact/artifact.json --tag v1.2.3
 
 If the provided tag already exists in the storage, the push will be aborted unless the force flag is enabled.
 
 `,
   )
   .addParam("artifactPath", "The compilation artifact path to push")
-  .addParam(
-    "tag",
-    'Project name and optionally tag of the artifact (format "name:tag")',
-  )
+  .addOptionalParam("tag", "Tag of the artifact")
   .addFlag(
     "force",
     "Force the push of the artifact even if it already exists in the storage",
@@ -324,7 +321,7 @@ If the provided tag already exists in the storage, the push will be aborted unle
     const optsParsingResult = z
       .object({
         artifactPath: z.string().min(1),
-        tag: ZArtifactName,
+        tag: z.string().optional(),
         force: z.boolean().default(false),
         debug: z.boolean().default(sokoConfig.debug),
       })
@@ -351,7 +348,7 @@ If the provided tag already exists in the storage, the push will be aborted unle
     );
 
     const ensureResult = await toAsyncResult(
-      localProvider.ensureProjectSetup(optsParsingResult.data.tag.project),
+      localProvider.ensureProjectSetup(sokoConfig.project),
       { debug: optsParsingResult.data.debug },
     );
     if (!ensureResult.success) {
@@ -372,9 +369,8 @@ If the provided tag already exists in the storage, the push will be aborted unle
     const pushResult = await toAsyncResult(
       pushArtifact(
         optsParsingResult.data.artifactPath,
-        optsParsingResult.data.tag.project,
-        // @dev `tagOrId` must be understood as a tag only here as the ID is derived from the artifact content
-        optsParsingResult.data.tag.tagOrId,
+        sokoConfig.project,
+        optsParsingResult.data.tag,
         {
           debug: optsParsingResult.data.debug,
           force: optsParsingResult.data.force,
@@ -399,7 +395,7 @@ If the provided tag already exists in the storage, the push will be aborted unle
     }
     console.log(
       LOG_COLORS.success,
-      `\nArtifact "${optsParsingResult.data.tag.project}:${optsParsingResult.data.tag.tagOrId || pushResult.value}" pushed successfully`,
+      `\nArtifact "${sokoConfig.project}:${optsParsingResult.data.tag || pushResult.value}" pushed successfully`,
     );
   });
 
@@ -576,9 +572,13 @@ sokoScope
     "Compare a local compilation artifacts with an existing release.",
   )
   .addParam("artifactPath", "The compilation artifact path to compare")
-  .addParam(
+  .addOptionalParam(
+    "id",
+    "The ID of the artifact to compare with, can not be used with the `tag` parameter",
+  )
+  .addOptionalParam(
     "tag",
-    "The artifact to compare with, formatted as `project:tag|ID`",
+    "The tag of the artifact to compare with, can not be used with the `id` parameter",
   )
   .addFlag("debug", "Enable debug mode")
   .setAction(async (opts, hre) => {
@@ -592,7 +592,8 @@ sokoScope
     const paramParsingResult = z
       .object({
         artifactPath: z.string().min(1),
-        tag: ZArtifactName,
+        id: z.string().optional(),
+        tag: z.string().optional(),
         debug: z.boolean().default(sokoConfig.debug),
       })
       .safeParse(opts);
@@ -604,8 +605,25 @@ sokoScope
       process.exitCode = 1;
       return;
     }
+    if (paramParsingResult.data.id && paramParsingResult.data.tag) {
+      console.error(
+        LOG_COLORS.error,
+        "❌ The ID and tag parameters can not be used together",
+      );
+      process.exitCode = 1;
+      return;
+    }
 
-    const tagOrId = paramParsingResult.data.tag.tagOrId;
+    if (!paramParsingResult.data.id && !paramParsingResult.data.tag) {
+      console.error(
+        LOG_COLORS.error,
+        "❌ The artifact must be identified by a tag or an ID",
+      );
+      process.exitCode = 1;
+      return;
+    }
+
+    const tagOrId = paramParsingResult.data.id || paramParsingResult.data.tag;
     if (!tagOrId) {
       console.error(
         LOG_COLORS.error,
@@ -617,7 +635,7 @@ sokoScope
 
     console.log(
       LOG_COLORS.log,
-      `\nComparing the current compilation with the "${paramParsingResult.data.tag.project}:${tagOrId}" artifact`,
+      `\nComparing the current compilation with the "${sokoConfig.project}:${tagOrId}" artifact`,
     );
 
     const localProvider = new LocalStorageProvider(
@@ -625,7 +643,7 @@ sokoScope
     );
 
     const ensureResult = await toAsyncResult(
-      localProvider.ensureProjectSetup(paramParsingResult.data.tag.project),
+      localProvider.ensureProjectSetup(sokoConfig.project),
       { debug: paramParsingResult.data.debug },
     );
     if (!ensureResult.success) {
@@ -646,7 +664,7 @@ sokoScope
     const differencesResult = await toAsyncResult(
       generateDiffWithTargetRelease(
         paramParsingResult.data.artifactPath,
-        { project: paramParsingResult.data.tag.project, tagOrId },
+        { project: sokoConfig.project, tagOrId },
         {
           debug: paramParsingResult.data.debug,
         },
