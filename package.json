@@ -1,6 +1,6 @@
 {
   "name": "hardhat-soko",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Hardhat plugin for managing compilation artifacts",
   "author": "Loïc Vincent-Genod",
   "homepage": "https://github.com/VGLoic/hardhat-soko",

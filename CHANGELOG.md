@@ -1,5 +1,11 @@
 # hardhat-soko
 
+## 0.8.0
+
+### Minor Changes
+
+- ba6c51e: allow project in setup
+
 ## 0.7.0
 
 ### Minor Changes
