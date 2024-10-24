@@ -5,8 +5,10 @@ Hardhat plugin in order to manage your smart contract compilation artifacts.
 1. [Motivation](#motivation),
 2. [Installation](#installation),
 3. [Configuration](#configuration),
-4. [Hardhat Tasks](#tasks),
-5. [Using the typings](#using-the-typings).
+4. [Projects, tags and IDs](#projects-tags-and-ids),
+5. [Hardhat Tasks](#tasks),
+6. [Using the typings](#using-the-typings),
+7. [Integration examples](#integration-examples).
 
 ## Motivation
 
@@ -252,3 +254,10 @@ const deployMyExample: DeployFunction = async function (
 
 export default deployMyExample;
 ```
+
+## Integration examples
+
+Here are examples of integration with Hardhat Soko in order to handle the releases of smart contracts, deployments and publication of NPM packages containing ABI and deployment addresses:
+
+- [everything with Hardhat](https://github.com/VGLoic/hardhat-soko-example),
+- [compilation and testing with Foundry, deployments with Hardhat](https://github.com/VGLoic/foundry-hardhat-soko-example).
