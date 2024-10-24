@@ -252,3 +252,10 @@ const deployMyExample: DeployFunction = async function (
 
 export default deployMyExample;
 ```
+
+## Examples
+
+Here are examples of integration with Hardhat Soko in order to handle the releases, deployments and publication of NPM packages containing ABI and deployment addresses:
+
+- [everything with Hardhat](https://github.com/VGLoic/hardhat-soko-example),
+- [compilation and testing with Foundry, deployments with Hardhat](https://github.com/VGLoic/foundry-hardhat-soko-example).
