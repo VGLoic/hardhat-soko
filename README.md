@@ -12,11 +12,11 @@ Hardhat plugin in order to manage your smart contract compilation artifacts.
 
 ## Motivation
 
-When compiling the smart contracts, the developer will generate _compilation artifacts_. They will contain all the needed informations for further tasks such as deployment, verification or simple contract interactions.
+When compiling the smart contracts, the developer will generate _compilation artifacts_. They will contain all the needed informations for further tasks such as deployment, verification or contract interactions.
 
-These compilation artifacts are generally ignored and not commited nor stored. At best, compilation artifact for a contract is contained within its deployment summary. Not having a clear way of identifying or re-using an artifact is a painful experience for all developers working closely or remotely with the smart contracts:
+These compilation artifacts are often ignored and not commited nor stored. At best, compilation artifact for a contract is contained within its deployment summary. Not having a clear way of identifying or re-using an artifact is a painful experience for all developers working closely or remotely with the smart contracts:
 
-- the smart contract developer is afraid of erasing artifacts that are still needed when developing new features,
+- the smart contract developer, when developing new features, is afraid of erasing artifacts that are still needed,
 - the "smart contract devops" has to execute the deployment or interaction scripts with artifact that are meant to be thrown away, it complexifies drastically the sharing of ABIs and deployments to the rest of the team,
 - the developer using the deployed smart contracts often ends up copy pasting deployed addresses and ABIs without having a clear vision on it.
 
@@ -25,7 +25,7 @@ These compilation artifacts are generally ignored and not commited nor stored. A
 Once the artifacts are kept safe on the storage, developers can easily leverage them in order to execute the same tasks as before but in a safer and clearer way:
 
 - deployment scripts depend only on frozen artifacts,
-- the artifact associated to a deployed contract can be easily found, hence allowing simple verification or interaction,
+- the artifact associated to a deployed contract can be easily found, hence allowing verification or interaction,
 - pipelines can be built using the stored artifacts in order to expose safely to other developers the ABIs and the deployed contracts.
 
 ## Installation
@@ -101,7 +101,7 @@ type SokoHardhatUserConfig = {
 
 ## Projects, tags and IDs
 
-**An ID, e.g. `dcauXtavGLxC`, is derived for each compilation artifact**. The ID is based on the content of the artifact.
+**An ID, e.g. `123456789abcdef`, is derived for each compilation artifact**. The ID is based on the content of the artifact.
 
 **A tag, e.g. `v1.2.3`, can be associated to a compilation artifact when pushed.**
 
@@ -224,7 +224,7 @@ The full compilation artifact of a tag can be retrieved using the `project("my-p
 
 ### Example with hardhat-deploy
 
-A simple example can be made with the [hardhat-deploy](https://github.com/wighawag/hardhat-deploy) plugin for deploying a released smart contract.
+An example can be made with the [hardhat-deploy](https://github.com/wighawag/hardhat-deploy) plugin for deploying a released smart contract.
 
 The advantage of this deployment is that it only works with frozen artifacts. New development will never have an impact on it.
 
