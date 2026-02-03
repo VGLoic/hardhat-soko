@@ -1,5 +1,8 @@
 # Hardhat Soko
 
+> [!WARNING]
+> This project has been moved to a new [repository](https://https://github.com/VGLoic/soko-monorepo)
+
 Hardhat plugin in order to manage your smart contract compilation artifacts.
 
 1. [Motivation](#motivation),
